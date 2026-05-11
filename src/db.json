@@ -1,0 +1,364 @@
+{
+  "users": [
+    { "id": "u1", "email": "admin@gixen.ro", "password": "admin123", "role": "admin", "name": "Admin Gixen", "firmId": null },
+    { "id": "u_tadmin", "email": "test.admin", "password": "test.admin", "role": "admin", "name": "Test Admin", "firmId": null },
+    { "id": "u2", "email": "contact@papirus.ro", "password": "client123", "role": "client", "name": "Ionescu Mihai", "firmId": "f1", "status": "activ" },
+    { "id": "u_tclient", "email": "test.client", "password": "test.client", "role": "client", "name": "Test Client", "firmId": "f_test", "status": "activ" },
+    { "id": "u3", "email": "achizitii@cleanpro.ro", "password": "client123", "role": "client", "name": "Popescu Ana", "firmId": "f2", "status": "activ" },
+    { "id": "u4", "email": "nou@firma.ro", "password": "client123", "role": "client", "name": "Gheorghe Dan", "firmId": "f3", "status": "in_aprobare" }
+  ],
+  "firms": [
+    { "id": "f_test", "name": "SC Test Client SRL", "cui": "RO99999999", "regCom": "J40/9999/2024", "adresa": "Str. Test nr. 1, București", "telefon": "0700 000 000", "email": "test.client", "discountGlobal": 5, "status": "activ" },
+    { "id": "f1", "name": "SC Papirus SRL", "cui": "RO12345678", "regCom": "J40/1234/2010", "adresa": "Str. Mihai Eminescu 12, Bucuresti", "telefon": "0721 234 567", "email": "contact@papirus.ro", "discountGlobal": 5, "status": "activ" },
+    { "id": "f2", "name": "CleanPro Distribution SRL", "cui": "RO87654321", "regCom": "J35/567/2015", "adresa": "Calea Victoriei 88, Cluj-Napoca", "telefon": "0745 678 901", "email": "achizitii@cleanpro.ro", "discountGlobal": 8, "status": "activ" },
+    { "id": "f3", "name": "Nova Retail SRL", "cui": "RO11223344", "regCom": "J22/890/2022", "adresa": "Str. Libertatii 5, Iasi", "telefon": "0733 445 566", "email": "nou@firma.ro", "discountGlobal": 0, "status": "in_aprobare" }
+  ],
+  "products": [
+    {
+      "id": "p1", "cod": "GX-PTR-XXL", "name": "Patrice XXL", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2026/03/Patrice-XXL.png",
+      "pretBaza": 8.50, "unitate": "rolă", "stoc": 9600, "activ": true,
+      "specs": { "ply": 4, "sheets": 280, "weight": "1000g", "pack": "H21.5, Ø27cm", "packsPerBox": 4 },
+      "tag": "Best Seller",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 8.50 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 7.80 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 7.10 }
+      ]
+    },
+    {
+      "id": "p2", "cod": "GX-PTR-PRO", "name": "Patrice Profesional", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2026/03/Patrice-Professional.png",
+      "pretBaza": 12.00, "unitate": "rolă", "stoc": 4800, "activ": true,
+      "specs": { "ply": 4, "sheets": 350, "weight": "1500g", "pack": "H25, Ø27cm", "packsPerBox": 2 },
+      "tag": "NEW",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 95,  "pret": 12.00 },
+        { "cantMin": 96,  "cantMax": 239, "pret": 11.00 },
+        { "cantMin": 240, "cantMax": 9999,"pret": 10.00 }
+      ]
+    },
+    {
+      "id": "p3", "cod": "GX-PTR-CLS", "name": "Patrice Clasic 4S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Patrice-Classic.png",
+      "pretBaza": 6.20, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 4, "sheets": 160, "weight": "550g", "pack": "H22, Ø21.5cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 6.20 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 5.60 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 5.00 }
+      ]
+    },
+    {
+      "id": "p4", "cod": "GX-PTR-RTO", "name": "Patrice Retro 4S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mockup-Folie-Role-DUO-Inalte-Compact-D19xH26-Patrice-Retro.png",
+      "pretBaza": 6.20, "unitate": "rolă", "stoc": 11520, "activ": true,
+      "specs": { "ply": 4, "sheets": 100, "weight": "600g", "pack": "H25, Ø20cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 6.20 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 5.60 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 5.00 }
+      ]
+    },
+    {
+      "id": "p5", "cod": "GX-PTR-CNY", "name": "Patrice Candy 4S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-DUO-Candy.png",
+      "pretBaza": 6.20, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 4, "sheets": 160, "weight": "550g", "pack": "H22, Ø21.5cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 6.20 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 5.60 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 5.00 }
+      ]
+    },
+    {
+      "id": "p6", "cod": "GX-PTR-DLX", "name": "Patrice Deluxe 4S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-DUO-Patrice-Greece-Deluxe.png",
+      "pretBaza": 6.50, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 4, "sheets": 160, "weight": "550g", "pack": "H22, Ø21.5cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 6.50 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 5.90 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 5.30 }
+      ]
+    },
+    {
+      "id": "p7", "cod": "GX-PTR-RSU", "name": "Patrice Color Roșu", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mockup-Folie-Role-DUO-Inalte-Compact-D19xH26-Rosu.png",
+      "pretBaza": 5.40, "unitate": "rolă", "stoc": 11520, "activ": true,
+      "specs": { "ply": 2, "sheets": 125, "weight": "400g", "pack": "H25, Ø19cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 5.40 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 4.90 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 4.40 }
+      ]
+    },
+    {
+      "id": "p8", "cod": "GX-PTR-TRC", "name": "Patrice Color Turcoaz", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mockup-Folie-Role-DUO-Inalte-Compact-D19xH26-Turcoaz.png",
+      "pretBaza": 5.40, "unitate": "rolă", "stoc": 11520, "activ": true,
+      "specs": { "ply": 2, "sheets": 125, "weight": "400g", "pack": "H25, Ø19cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 5.40 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 4.90 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 4.40 }
+      ]
+    },
+    {
+      "id": "p9", "cod": "GX-PTR-NGR", "name": "Patrice Color Negru", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mockup-Folie-Role-DUO-Inalte-Compact-D19xH26-Negru.png",
+      "pretBaza": 5.40, "unitate": "rolă", "stoc": 11520, "activ": true,
+      "specs": { "ply": 2, "sheets": 125, "weight": "400g", "pack": "H25, Ø19cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 5.40 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 4.90 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 4.40 }
+      ]
+    },
+    {
+      "id": "p10", "cod": "GX-BRI-CLS", "name": "Brio Clasic 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-SOLO-Brio-Economic.png",
+      "pretBaza": 3.80, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 2, "sheets": 210, "weight": "400g", "pack": "H22, Ø21cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 3.80 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 3.40 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 3.00 }
+      ]
+    },
+    {
+      "id": "p11", "cod": "GX-BRI-FLW", "name": "Brio Flowers 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-DUO-Brio-Flowers.png",
+      "pretBaza": 3.90, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 2, "sheets": 210, "weight": "400g", "pack": "H22, Ø21cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 3.90 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 3.50 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 3.10 }
+      ]
+    },
+    {
+      "id": "p12", "cod": "GX-MRB-2S", "name": "Mr Big 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-26-SOLO-Mr-Big-Economic.png",
+      "pretBaza": 5.20, "unitate": "rolă", "stoc": 13824, "activ": true,
+      "specs": { "ply": 2, "sheets": 330, "weight": "600g", "pack": "H22, Ø27cm", "packsPerBox": 4 },
+      "tag": "Best Price",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 5.20 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 4.70 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 4.20 }
+      ]
+    },
+    {
+      "id": "p13", "cod": "GX-MRB-LMN", "name": "Mr. Big Lemon & Olives 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Lata-D26-DUO.png",
+      "pretBaza": 5.40, "unitate": "rolă", "stoc": 13824, "activ": true,
+      "specs": { "ply": 2, "sheets": 330, "weight": "600g", "pack": "H22, Ø27cm", "packsPerBox": 4 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 5.40 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 4.90 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 4.40 }
+      ]
+    },
+    {
+      "id": "p14", "cod": "GX-FLP-RSU", "name": "Flip Roșu 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-26-SOLO-Flip.png",
+      "pretBaza": 5.20, "unitate": "rolă", "stoc": 13824, "activ": true,
+      "specs": { "ply": 2, "sheets": 330, "weight": "600g", "pack": "H22, Ø27cm", "packsPerBox": 4 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 5.20 },
+        { "cantMin": 48,  "cantMax": 191, "pret": 4.70 },
+        { "cantMin": 192, "cantMax": 9999,"pret": 4.20 }
+      ]
+    },
+    {
+      "id": "p15", "cod": "GX-FLP-VLT", "name": "Flip Violet 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-SOLO-Flip-Mov.png",
+      "pretBaza": 4.60, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 2, "sheets": 250, "weight": "450g", "pack": "H22, Ø22cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 4.60 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 4.10 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 3.70 }
+      ]
+    },
+    {
+      "id": "p16", "cod": "GX-FLP-GLB", "name": "Flip Galben 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-SOLO-Flip-Galben.png",
+      "pretBaza": 4.00, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 2, "sheets": 180, "weight": "350g", "pack": "H22, Ø21cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 4.00 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 3.60 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 3.20 }
+      ]
+    },
+    {
+      "id": "p17", "cod": "GX-RYL-MNI", "name": "Royal Clean Mini 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-SOLO-Royal-Mini.png",
+      "pretBaza": 2.80, "unitate": "rolă", "stoc": 20160, "activ": true,
+      "specs": { "ply": 2, "sheets": 150, "weight": "250g", "pack": "H19, Ø21cm", "packsPerBox": 6 },
+      "tag": "Best Price",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 2.80 },
+        { "cantMin": 48,  "cantMax": 335, "pret": 2.50 },
+        { "cantMin": 336, "cantMax": 9999,"pret": 2.20 }
+      ]
+    },
+    {
+      "id": "p18", "cod": "GX-RYL-MXI", "name": "Royal Clean Maxi 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-SOLO-Royal-Maxi.png",
+      "pretBaza": 3.20, "unitate": "rolă", "stoc": 20160, "activ": true,
+      "specs": { "ply": 2, "sheets": 200, "weight": "300g", "pack": "H19, Ø22cm", "packsPerBox": 6 },
+      "tag": "Best Price",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 3.20 },
+        { "cantMin": 48,  "cantMax": 335, "pret": 2.90 },
+        { "cantMin": 336, "cantMax": 9999,"pret": 2.60 }
+      ]
+    },
+    {
+      "id": "p19", "cod": "GX-GXL-2S", "name": "Gixal 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-SOLO-Gixal.png",
+      "pretBaza": 3.90, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 2, "sheets": 180, "weight": "350g", "pack": "H22, Ø21cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 3.90 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 3.50 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 3.10 }
+      ]
+    },
+    {
+      "id": "p20", "cod": "GX-BBL-2S", "name": "Buble 2S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-DUO-Bubble.png",
+      "pretBaza": 3.90, "unitate": "rolă", "stoc": 17280, "activ": true,
+      "specs": { "ply": 2, "sheets": 180, "weight": "350g", "pack": "H22, Ø21cm", "packsPerBox": 6 },
+      "tag": null,
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 3.90 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 3.50 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 3.10 }
+      ]
+    },
+    {
+      "id": "p21", "cod": "GX-PTR-PTE", "name": "Patrice Ediție de Paște", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2026/02/Patrice-Paste.png",
+      "pretBaza": 6.80, "unitate": "rolă", "stoc": 6912, "activ": true,
+      "specs": { "ply": 4, "sheets": 160, "weight": "550g", "pack": "H22, Ø21.5cm", "packsPerBox": 6 },
+      "tag": "Ediție limitată",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 6.80 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 6.20 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 5.60 }
+      ]
+    },
+    {
+      "id": "p22", "cod": "GX-PTR-XMS", "name": "Patrice Moș Crăciun 4S", "categorie": "Hârtie igienică",
+      "imagine": "https://gixen.ro/wp-content/uploads/2025/11/Mock-up-Rola-Normala-DUO-Patrice-Santa.png",
+      "pretBaza": 6.80, "unitate": "rolă", "stoc": 0, "activ": true,
+      "specs": { "ply": 4, "sheets": 160, "weight": "550g", "pack": "H22, Ø21.5cm", "packsPerBox": 6 },
+      "tag": "Sezonier",
+      "tierPricing": [
+        { "cantMin": 1,   "cantMax": 47,  "pret": 6.80 },
+        { "cantMin": 48,  "cantMax": 287, "pret": 6.20 },
+        { "cantMin": 288, "cantMax": 9999,"pret": 5.60 }
+      ]
+    }
+  ],
+  "clientPricing": [
+    { "firmId": "f1", "productId": "p3", "discountExtra": 5 },
+    { "firmId": "f1", "productId": "p1", "discountExtra": 3 },
+    { "firmId": "f2", "productId": "p12", "discountExtra": 7 },
+    { "firmId": "f_test", "productId": "p1", "discountExtra": 4 }
+  ],
+  "promotions": [
+    {
+      "id": "promo1", "name": "Campanie Mai 2025 — Patrice XXL",
+      "productId": "p1", "firmId": null, "discountPercent": 10,
+      "activa": true, "dataStart": "2025-05-01", "dataEnd": "2025-05-31"
+    },
+    {
+      "id": "promo2", "name": "Ofertă specială CleanPro — Mr Big",
+      "productId": "p12", "firmId": "f2", "discountPercent": 12,
+      "activa": true, "dataStart": "2025-04-01", "dataEnd": "2025-06-30"
+    }
+  ],
+  "orders": [
+    {
+      "id": "o1", "nr": "GX-2025-087", "firmId": "f1", "userId": "u2",
+      "status": "in_procesare", "dataComanda": "2025-05-02", "dataLivrare": "2025-05-06",
+      "observatii": "Livrare dimineata", "total": 2142.00, "nrFactura": null,
+      "lines": [
+        { "productId": "p1", "cantitate": 192, "pretUnitar": 7.10, "discount": 3, "total": 1321.34 },
+        { "productId": "p3", "cantitate": 96, "pretUnitar": 5.00, "discount": 5, "total": 456.00 },
+        { "productId": "p17", "cantitate": 48, "pretUnitar": 2.50, "discount": 0, "total": 120.00 }
+      ]
+    },
+    {
+      "id": "o2", "nr": "GX-2025-081", "firmId": "f1", "userId": "u2",
+      "status": "livrata", "dataComanda": "2025-04-24", "dataLivrare": "2025-04-28",
+      "observatii": "", "total": 1584.00, "nrFactura": "FX-1234",
+      "lines": [
+        { "productId": "p1", "cantitate": 192, "pretUnitar": 7.80, "discount": 3, "total": 1451.52 },
+        { "productId": "p10", "cantitate": 48, "pretUnitar": 3.40, "discount": 0, "total": 163.20 }
+      ]
+    },
+    {
+      "id": "o3", "nr": "GX-2025-074", "firmId": "f1", "userId": "u2",
+      "status": "livrata", "dataComanda": "2025-04-15", "dataLivrare": "2025-04-18",
+      "observatii": "", "total": 3218.40, "nrFactura": "FX-1198",
+      "lines": [
+        { "productId": "p1", "cantitate": 384, "pretUnitar": 7.10, "discount": 3, "total": 2643.65 },
+        { "productId": "p3", "cantitate": 96, "pretUnitar": 5.00, "discount": 5, "total": 456.00 }
+      ]
+    },
+    {
+      "id": "o4", "nr": "GX-2025-068", "firmId": "f1", "userId": "u2",
+      "status": "anulata", "dataComanda": "2025-04-04", "dataLivrare": null,
+      "observatii": "Anulata la cererea clientului", "total": 547.20, "nrFactura": null,
+      "lines": [
+        { "productId": "p10", "cantitate": 144, "pretUnitar": 3.40, "discount": 0, "total": 489.60 }
+      ]
+    },
+    {
+      "id": "o5", "nr": "GX-2025-055", "firmId": "f1", "userId": "u2",
+      "status": "livrata", "dataComanda": "2025-03-20", "dataLivrare": "2025-03-24",
+      "observatii": "", "total": 4294.08, "nrFactura": "FX-1102",
+      "lines": [
+        { "productId": "p1", "cantitate": 384, "pretUnitar": 7.10, "discount": 3, "total": 2643.65 },
+        { "productId": "p3", "cantitate": 288, "pretUnitar": 5.00, "discount": 5, "total": 1368.00 }
+      ]
+    },
+    {
+      "id": "o6", "nr": "GX-2025-091", "firmId": "f2", "userId": "u3",
+      "status": "in_aprobare", "dataComanda": "2025-05-05", "dataLivrare": "2025-05-10",
+      "observatii": "Urgent", "total": 6124.80, "nrFactura": null,
+      "lines": [
+        { "productId": "p12", "cantitate": 192, "pretUnitar": 4.20, "discount": 12, "total": 709.63 },
+        { "productId": "p1", "cantitate": 384, "pretUnitar": 7.10, "discount": 0, "total": 2726.40 }
+      ]
+    },
+    {
+      "id": "o7", "nr": "GX-2025-089", "firmId": "f2", "userId": "u3",
+      "status": "aprobata", "dataComanda": "2025-05-03", "dataLivrare": "2025-05-09",
+      "observatii": "", "total": 1613.52, "nrFactura": null,
+      "lines": [
+        { "productId": "p12", "cantitate": 384, "pretUnitar": 4.20, "discount": 7, "total": 1500.77 }
+      ]
+    }
+  ]
+}
