@@ -16,16 +16,12 @@ import AdminClienti from './pages/AdminClienti'
 import AdminProduse from './pages/AdminProduse'
 import AdminPromotii from './pages/AdminPromotii'
 import AdminRapoarte from './pages/AdminRapoarte'
-import AdminOferta from './pages/AdminOferta'
-import AdminOferte from './pages/AdminOferte'
-import AdminRuleBuilder from './pages/AdminRuleBuilder'
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard', '/comanda-noua': 'Comandă nouă', '/comenzile-mele': 'Comenzile mele',
   '/produse': 'Produse & prețuri', '/favorite': 'Favorite', '/rapoarte': 'Rapoarte', '/profil': 'Profil firmă',
   '/admin/dashboard': 'Dashboard Admin', '/admin/comenzi': 'Comenzi', '/admin/clienti': 'Clienți',
   '/admin/produse': 'Produse', '/admin/promotii': 'Promoții', '/admin/rapoarte': 'Rapoarte',
-  '/admin/oferta': 'Generator ofertă', '/admin/oferte': 'Oferte emise', '/admin/promotii-rules': 'Motor promoții',
 }
 
 function TitleUpdater() {
@@ -43,14 +39,11 @@ function RequireAuth({ children, role }) {
   if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
   return children
 }
-
 function RootRedirect() {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
 }
-
-const A = ({ role, children }) => <RequireAuth role={role}>{children}</RequireAuth>
 
 export default function App() {
   return (
@@ -60,22 +53,19 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/" element={<RootRedirect />} />
-        <Route path="/dashboard"        element={<A role="client"><Dashboard /></A>} />
-        <Route path="/comanda-noua"     element={<A role="client"><ComandaNoua /></A>} />
-        <Route path="/comenzile-mele"   element={<A role="client"><ComenzileMele /></A>} />
-        <Route path="/produse"          element={<A role="client"><Produse /></A>} />
-        <Route path="/favorite"         element={<A role="client"><Favorite /></A>} />
-        <Route path="/rapoarte"         element={<A role="client"><ClientRapoarte /></A>} />
-        <Route path="/profil"           element={<A role="client"><Profil /></A>} />
-        <Route path="/admin/dashboard"  element={<A role="admin"><AdminDashboard /></A>} />
-        <Route path="/admin/comenzi"    element={<A role="admin"><AdminComenzi /></A>} />
-        <Route path="/admin/clienti"    element={<A role="admin"><AdminClienti /></A>} />
-        <Route path="/admin/produse"    element={<A role="admin"><AdminProduse /></A>} />
-        <Route path="/admin/promotii"   element={<A role="admin"><AdminPromotii /></A>} />
-        <Route path="/admin/rapoarte"   element={<A role="admin"><AdminRapoarte /></A>} />
-        <Route path="/admin/oferta"     element={<A role="admin"><AdminOferta /></A>} />
-        <Route path="/admin/oferte"     element={<A role="admin"><AdminOferte /></A>} />
-        <Route path="/admin/promotii-rules" element={<A role="admin"><AdminRuleBuilder /></A>} />
+        <Route path="/dashboard" element={<RequireAuth role="client"><Dashboard /></RequireAuth>} />
+        <Route path="/comanda-noua" element={<RequireAuth role="client"><ComandaNoua /></RequireAuth>} />
+        <Route path="/comenzile-mele" element={<RequireAuth role="client"><ComenzileMele /></RequireAuth>} />
+        <Route path="/produse" element={<RequireAuth role="client"><Produse /></RequireAuth>} />
+        <Route path="/favorite" element={<RequireAuth role="client"><Favorite /></RequireAuth>} />
+        <Route path="/rapoarte" element={<RequireAuth role="client"><ClientRapoarte /></RequireAuth>} />
+        <Route path="/profil" element={<RequireAuth role="client"><Profil /></RequireAuth>} />
+        <Route path="/admin/dashboard" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
+        <Route path="/admin/comenzi" element={<RequireAuth role="admin"><AdminComenzi /></RequireAuth>} />
+        <Route path="/admin/clienti" element={<RequireAuth role="admin"><AdminClienti /></RequireAuth>} />
+        <Route path="/admin/produse" element={<RequireAuth role="admin"><AdminProduse /></RequireAuth>} />
+        <Route path="/admin/promotii" element={<RequireAuth role="admin"><AdminPromotii /></RequireAuth>} />
+        <Route path="/admin/rapoarte" element={<RequireAuth role="admin"><AdminRapoarte /></RequireAuth>} />
         <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>

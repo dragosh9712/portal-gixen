@@ -13,13 +13,18 @@ export function StoreProvider({ children }) {
   }
 
   // ── Orders ──
-  function updateOrderStatus(orderId, status) {
+  function updateOrderStatus(orderId, status, notaInterna) {
     updateDb(d => {
       const o = d.orders.find(o => o.id === orderId)
       if (!o) return
-      const prev = o.status; o.status = status
+      const prevStatus = o.status
+      o.status = status
       if (!o.activityLog) o.activityLog = []
-      o.activityLog.push({ action: `Status: ${prev} → ${status}`, timestamp: new Date().toISOString(), by: 'Admin' })
+      o.activityLog.push({ action: `Status schimbat: ${prevStatus} → ${status}`, timestamp: new Date().toISOString(), by: 'Admin' })
+      if (notaInterna) {
+        if (!o.noteInterne) o.noteInterne = []
+        o.noteInterne.push({ text: notaInterna, timestamp: new Date().toISOString() })
+      }
     })
   }
 
@@ -30,27 +35,22 @@ export function StoreProvider({ children }) {
       if (!o.noteInterne) o.noteInterne = []
       o.noteInterne.push({ text: nota, timestamp: new Date().toISOString() })
       if (!o.activityLog) o.activityLog = []
-      o.activityLog.push({ action: 'Notă internă adăugată', timestamp: new Date().toISOString(), by: 'Admin' })
+      o.activityLog.push({ action: `Notă internă adăugată`, timestamp: new Date().toISOString(), by: 'Admin' })
     })
   }
 
-  function createOrder(firmId, userId, lines, dataLivrare, observatii, adresaLivrare, discountLinii) {
+  function createOrder(firmId, userId, lines, dataLivrare, observatii) {
     const newId = 'o' + Date.now()
     const nr = 'GX-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 900) + 100)
     const total = lines.reduce((s, l) => s + l.total, 0)
-    const discTotal = (discountLinii || []).reduce((s, d) => s + d.valoare, 0)
     const order = {
       id: newId, nr, firmId, userId,
       status: 'plasata',
       dataComanda: new Date().toISOString().split('T')[0],
       dataLivrare: dataLivrare || null,
       observatii: observatii || '',
-      total: Math.round((total + discTotal) * 100) / 100,
+      total: Math.round(total * 100) / 100,
       nrFactura: null, noteInterne: [],
-      adresaLivrare: adresaLivrare || '',
-      transport: { sofer: null, nrMasina: null, dataLivrareConfirmata: null, oraEstimata: null },
-      documente: { nrAviz: null, urlAviz: null, nrFactura: null, urlFactura: null },
-      discountLinii: discountLinii || [],
       activityLog: [{ action: 'Comandă plasată', timestamp: new Date().toISOString(), by: 'Client' }],
       lines
     }
@@ -71,36 +71,7 @@ export function StoreProvider({ children }) {
     })
   }
 
-  function updateTransport(orderId, data) {
-    updateDb(d => {
-      const o = d.orders.find(o => o.id === orderId)
-      if (!o) return
-      o.transport = { ...o.transport, ...data }
-      if (!o.activityLog) o.activityLog = []
-      o.activityLog.push({ action: 'Date transport actualizate', timestamp: new Date().toISOString(), by: 'Admin' })
-    })
-  }
-
-  function updateDocumente(orderId, data) {
-    updateDb(d => {
-      const o = d.orders.find(o => o.id === orderId)
-      if (!o) return
-      o.documente = { ...o.documente, ...data }
-      if (data.nrFactura) o.nrFactura = data.nrFactura
-      if (!o.activityLog) o.activityLog = []
-      o.activityLog.push({ action: 'Documente actualizate', timestamp: new Date().toISOString(), by: 'Admin' })
-    })
-  }
-
-  function updateAdresaLivrare(orderId, adresa) {
-    updateDb(d => { const o = d.orders.find(o => o.id === orderId); if (o) o.adresaLivrare = adresa })
-  }
-
-  function setFactura(orderId, nrFactura) {
-    updateDb(d => { const o = d.orders.find(o => o.id === orderId); if (o) o.nrFactura = nrFactura })
-  }
-
-  // ── Firms ──
+  // ── Firms & Users ──
   function registerNewClient(firmData, userData) {
     const firmId = 'f' + Date.now()
     const userId = 'u' + Date.now()
@@ -109,8 +80,7 @@ export function StoreProvider({ children }) {
         id: firmId, name: firmData.name, cui: firmData.cui, regCom: firmData.regCom,
         adresa: firmData.adresa + ', ' + firmData.localitate + ', ' + firmData.judet,
         telefon: firmData.contactTelefon, email: firmData.contactEmail,
-        discountGlobal: 0, status: 'in_aprobare',
-        marciPermise: ['Gixen'], grupClient: 'standard'
+        discountGlobal: 0, status: 'in_aprobare'
       })
       d.users.push({
         id: userId, email: userData.email, password: userData.password,
@@ -181,65 +151,17 @@ export function StoreProvider({ children }) {
     })
   }
 
-  // ── Promotions (legacy) ──
+  // ── Promotions ──
   function addPromotion(promo) {
     updateDb(d => { d.promotions.push({ id: 'promo' + Date.now(), ...promo }) })
-  }
-
-  function updatePromotion(id, data) {
-    updateDb(d => {
-      const idx = d.promotions.findIndex(p => p.id === id)
-      if (idx >= 0) d.promotions[idx] = { ...d.promotions[idx], ...data }
-    })
   }
 
   function togglePromotion(id) {
     updateDb(d => { const p = d.promotions.find(p => p.id === id); if (p) p.activa = !p.activa })
   }
 
-  // ── Promotion Rules ──
-  function addPromotionRule(rule) {
-    updateDb(d => {
-      if (!d.promotionRules) d.promotionRules = []
-      d.promotionRules.push({ id: 'rule_' + Date.now(), ...rule })
-    })
-  }
-
-  function updatePromotionRule(id, data) {
-    updateDb(d => {
-      if (!d.promotionRules) return
-      const idx = d.promotionRules.findIndex(r => r.id === id)
-      if (idx >= 0) d.promotionRules[idx] = { ...d.promotionRules[idx], ...data }
-    })
-  }
-
-  function togglePromotionRule(id) {
-    updateDb(d => {
-      if (!d.promotionRules) return
-      const r = d.promotionRules.find(r => r.id === id)
-      if (r) r.activ = !r.activ
-    })
-  }
-
-  // ── Offers ──
-  function saveOffer(offerData) {
-    updateDb(d => {
-      if (!d.offers) d.offers = []
-      const existing = d.offers.findIndex(o => o.id === offerData.id)
-      if (existing >= 0) d.offers[existing] = offerData
-      else d.offers.push({ id: 'of' + Date.now(), ...offerData })
-    })
-  }
-
-  function updateOfferStatus(offerId, status) {
-    updateDb(d => {
-      const o = (d.offers || []).find(o => o.id === offerId)
-      if (o) o.status = status
-    })
-  }
-
-  function deleteOffer(offerId) {
-    updateDb(d => { d.offers = (d.offers || []).filter(o => o.id !== offerId) })
+  function setFactura(orderId, nrFactura) {
+    updateDb(d => { const o = d.orders.find(o => o.id === orderId); if (o) o.nrFactura = nrFactura })
   }
 
   // ── Computed stats ──
@@ -250,23 +172,11 @@ export function StoreProvider({ children }) {
   return (
     <StoreContext.Provider value={{
       db, totalPending, pendingApprovals, pendingOrders,
-      // Orders
       updateOrderStatus, addNotaInterna, createOrder, bulkUpdateOrderStatus,
-      updateTransport, updateDocumente, updateAdresaLivrare, setFactura,
-      // Firms
       registerNewClient, approveFirm, rejectFirm, updateFirm,
-      // Products
       updateProduct, addProduct,
-      // Favorites
       toggleFavorite, isFavorite,
-      // Pricing
-      setClientPricing,
-      // Promotions legacy
-      addPromotion, updatePromotion, togglePromotion,
-      // Promotion Rules
-      addPromotionRule, updatePromotionRule, togglePromotionRule,
-      // Offers
-      saveOffer, updateOfferStatus, deleteOffer,
+      setClientPricing, addPromotion, togglePromotion, setFactura
     }}>
       {children}
     </StoreContext.Provider>

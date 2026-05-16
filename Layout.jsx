@@ -13,9 +13,6 @@ function Icon({ name }) {
     clients: <><circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M2 18c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M15 9c1.657 0 3 1.343 3 3s-1.343 3-3 3M18 18c0-1.657-.895-3-2-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     promotions: <><path d="M3 10.5L10 3l7 7.5V18H3v-7.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M7.5 18v-5h5v5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></>,
     profile: <><circle cx="10" cy="6" r="3.5" stroke="currentColor" strokeWidth="1.5"/><path d="M3 18c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
-    rulebuilder: <><circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
-    oferte: <><path d="M9 2H4a1 1 0 00-1 1v14a1 1 0 001 1h12a1 1 0 001-1V7l-5-5H9z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M13 2v5h5M7 10h6M7 13h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
-    offer: <><path d="M4 2h8.5L17 6.5V18H4V2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M12 2v5h5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     chart: <path d="M3 17V11M7 17V7M11 17V9M15 17V5M19 17H1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>,
     heart: <path d="M10 17s-7-4.5-7-9a4 4 0 018 0 4 4 0 018 0c0 4.5-7 9-7 9z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>,
   }
@@ -48,7 +45,6 @@ export default function Layout({ children, title, subtitle, actions }) {
     { to: '/admin/produse', label: 'Produse', icon: 'products' },
     { to: '/admin/promotii', label: 'Promoții', icon: 'promotions' },
     { to: '/admin/rapoarte', label: 'Rapoarte', icon: 'chart' },
-    { to: '/admin/oferta', label: 'Generator ofertă', icon: 'offer' },
   ]
   const navItems = isAdmin ? adminNav : clientNav
   const initials = user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '??'
@@ -57,7 +53,7 @@ export default function Layout({ children, title, subtitle, actions }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <GixenLogo color="white" height={42} />
+          <GixenLogo color="white" height={36} />
           <div className="logo-sub">{isAdmin ? 'Panou administrare' : 'Portal comenzi'}</div>
         </div>
         <nav className="nav-section">

@@ -12,18 +12,16 @@ export function fmtDate(d) {
 // Order status badge
 export function statusBadge(status) {
   const map = {
-    draft:         { label: 'Draft',           cls: 'badge-gray' },
-    plasata:       { label: 'Plasată',          cls: 'badge-blue' },
-    in_aprobare:   { label: 'În aprobare',      cls: 'badge-orange' },
-    aprobata:      { label: 'Aprobată',         cls: 'badge-purple' },
-    in_procesare:  { label: 'Pick depozit',     cls: 'badge-blue' },
-    aviz_generat:  { label: 'Aviz generat',     cls: 'badge-purple' },
-    in_livrare:    { label: 'În livrare',       cls: 'badge-orange' },
-    livrata:       { label: 'Livrată',          cls: 'badge-green' },
-    anulata:       { label: 'Anulată',          cls: 'badge-red' },
-    activ:         { label: 'Activ',            cls: 'badge-green' },
-    in_aprobare_cont: { label: 'În aprobare',   cls: 'badge-orange' },
-    respinsa:      { label: 'Respinsă',         cls: 'badge-red' },
+    draft:        { label: 'Draft',         cls: 'badge-gray' },
+    plasata:      { label: 'Plasată',        cls: 'badge-blue' },
+    in_aprobare:  { label: 'În aprobare',    cls: 'badge-orange' },
+    aprobata:     { label: 'Aprobată',       cls: 'badge-purple' },
+    in_procesare: { label: 'În procesare',   cls: 'badge-blue' },
+    livrata:      { label: 'Livrată',        cls: 'badge-green' },
+    anulata:      { label: 'Anulată',        cls: 'badge-red' },
+    activ:        { label: 'Activ',          cls: 'badge-green' },
+    in_aprobare_cont: { label: 'În aprobare', cls: 'badge-orange' },
+    respinsa:     { label: 'Respinsă',       cls: 'badge-red' },
   }
   const s = map[status] || { label: status, cls: 'badge-gray' }
   return <span className={`badge ${s.cls}`}>{s.label}</span>
