@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import db from './db.json'
+import api, { setToken } from './api'
 
 const AuthContext = createContext(null)
 
@@ -9,20 +9,21 @@ export function AuthProvider({ children }) {
     return saved ? JSON.parse(saved) : null
   })
 
-  function login(email, password) {
-    const found = db.users.find(u => u.email === email && u.password === password)
-    if (!found) return { ok: false, error: 'Email sau parolă incorecte.' }
-    if (found.role === 'client') {
-      const firm = db.firms.find(f => f.id === found.firmId)
-      if (firm?.status === 'in_aprobare') return { ok: false, error: 'Contul tău este în așteptarea aprobării. Te contactăm în curând.' }
+  async function login(email, password) {
+    try {
+      const data = await api.auth.login(email, password)
+      setToken(data.token)
+      const userObj = { ...data.user }
+      setUser(userObj)
+      localStorage.setItem('gixen_user', JSON.stringify(userObj))
+      return { ok: true, user: userObj }
+    } catch (err) {
+      return { ok: false, error: err.message || 'Email sau parolă incorecte.' }
     }
-    const session = { ...found, password: undefined }
-    setUser(session)
-    localStorage.setItem('gixen_user', JSON.stringify(session))
-    return { ok: true }
   }
 
   function logout() {
+    setToken(null)
     setUser(null)
     localStorage.removeItem('gixen_user')
   }
