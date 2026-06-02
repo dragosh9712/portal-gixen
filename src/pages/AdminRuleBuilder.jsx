@@ -140,7 +140,7 @@ const emptyRule = {
 }
 
 export default function AdminRuleBuilder() {
-  const { db, addPromotion, updatePromotion } = useStore()
+  const { db, addPromotionRule, updatePromotionRule } = useStore()
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState(null)
   const [isNew, setIsNew] = useState(false)
@@ -202,12 +202,9 @@ export default function AdminRuleBuilder() {
       }
     }
     if (isNew) {
-      // Add to promotionRules via store
-      db.promotionRules = db.promotionRules || []
-      db.promotionRules.push({ id: 'rule_' + Date.now(), ...toSave })
+      addPromotionRule(toSave)
     } else {
-      const idx = db.promotionRules.findIndex(r => r.id === selected.id)
-      if (idx >= 0) db.promotionRules[idx] = { ...selected, ...toSave }
+      updatePromotionRule(selected.id, toSave)
     }
     setForm(null)
     setToast(isNew ? 'Regulă adăugată!' : 'Regulă salvată!')

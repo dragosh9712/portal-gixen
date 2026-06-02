@@ -72,28 +72,28 @@ export default function TransportDocs({ order, isAdmin = false }) {
   )
 }
 
+function Field({ label, value, field, section, onUpdateTransport, onUpdateDocumente, type = 'text', placeholder }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label style={{ fontSize: 11 }}>{label}</label>
+      <input type={type} className="w-full" placeholder={placeholder} defaultValue={value || ''}
+        onBlur={e => {
+          const val = e.target.value.trim()
+          if (val !== (value || '')) {
+            if (section === 'transport') onUpdateTransport({ [field]: val || null })
+            else onUpdateDocumente({ [field]: val || null })
+          }
+        }}
+        style={{ fontSize: 12, padding: '6px 10px' }}
+      />
+    </div>
+  )
+}
+
 // TransportDocsAdmin — versiunea admin cu editare
 export function TransportDocsAdmin({ order, onUpdateTransport, onUpdateDocumente }) {
   const t = order.transport || {}
   const d = order.documente || {}
-
-  function Field({ label, value, field, section, type = 'text', placeholder }) {
-    return (
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 11 }}>{label}</label>
-        <input type={type} className="w-full" placeholder={placeholder} defaultValue={value || ''}
-          onBlur={e => {
-            const val = e.target.value.trim()
-            if (val !== (value || '')) {
-              if (section === 'transport') onUpdateTransport({ [field]: val || null })
-              else onUpdateDocumente({ [field]: val || null })
-            }
-          }}
-          style={{ fontSize: 12, padding: '6px 10px' }}
-        />
-      </div>
-    )
-  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -102,10 +102,10 @@ export function TransportDocsAdmin({ order, onUpdateTransport, onUpdateDocumente
         <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 10, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           🚚 Transport (WMS → manual până la integrare)
         </div>
-        <Field label="Nume șofer" value={t.sofer} field="sofer" section="transport" placeholder="ex: Ionescu Alexandru" />
-        <Field label="Nr. mașină" value={t.nrMasina} field="nrMasina" section="transport" placeholder="ex: B 247 GXN" />
-        <Field label="Dată livrare confirmată" value={t.dataLivrareConfirmata} field="dataLivrareConfirmata" section="transport" type="date" />
-        <Field label="Oră estimată livrare" value={t.oraEstimata} field="oraEstimata" section="transport" placeholder="ex: 10:00–12:00" />
+        <Field label="Nume șofer" value={t.sofer} field="sofer" section="transport" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="ex: Ionescu Alexandru" />
+        <Field label="Nr. mașină" value={t.nrMasina} field="nrMasina" section="transport" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="ex: B 247 GXN" />
+        <Field label="Dată livrare confirmată" value={t.dataLivrareConfirmata} field="dataLivrareConfirmata" section="transport" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} type="date" />
+        <Field label="Oră estimată livrare" value={t.oraEstimata} field="oraEstimata" section="transport" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="ex: 10:00–12:00" />
       </div>
 
       {/* Documente edit */}
@@ -113,10 +113,10 @@ export function TransportDocsAdmin({ order, onUpdateTransport, onUpdateDocumente
         <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 10, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           📄 Documente (WMS → manual până la integrare)
         </div>
-        <Field label="Nr. aviz însoțire marfă" value={d.nrAviz} field="nrAviz" section="docs" placeholder="ex: AV-2025-0891" />
-        <Field label="URL PDF aviz (encodat)" value={d.urlAviz} field="urlAviz" section="docs" placeholder="https://..." />
-        <Field label="Nr. factură fiscală" value={d.nrFactura} field="nrFactura" section="docs" placeholder="ex: FX-1234" />
-        <Field label="URL PDF factură (encodat)" value={d.urlFactura} field="urlFactura" section="docs" placeholder="https://..." />
+        <Field label="Nr. aviz însoțire marfă" value={d.nrAviz} field="nrAviz" section="docs" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="ex: AV-2025-0891" />
+        <Field label="URL PDF aviz (encodat)" value={d.urlAviz} field="urlAviz" section="docs" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="https://..." />
+        <Field label="Nr. factură fiscală" value={d.nrFactura} field="nrFactura" section="docs" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="ex: FX-1234" />
+        <Field label="URL PDF factură (encodat)" value={d.urlFactura} field="urlFactura" section="docs" onUpdateTransport={onUpdateTransport} onUpdateDocumente={onUpdateDocumente} placeholder="https://..." />
         <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, lineHeight: 1.6 }}>
           💡 URL-urile vor veni automat din WMS SelectSoft după integrare.<br/>
           Până atunci, completează manual după ce primești datele din ERP.

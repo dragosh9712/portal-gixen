@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
-import EmptyState from '../components/EmptyState'
 import { lei, calcLinePrice } from '../utils'
 
 function ProductImage({ src, alt, style }) {

@@ -11,7 +11,6 @@ export default function Dashboard() {
   const { db } = useStore()
   const navigate = useNavigate()
 
-  const firm = db.firms.find(f => f.id === user.firmId)
   const myOrders = db.orders.filter(o => o.firmId === user.firmId)
 
   const kpi = useMemo(() => {

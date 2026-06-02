@@ -186,8 +186,8 @@ export default function AdminPromotii() {
   function normDate(d) {
     if (!d) return null
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-    if (/^\d{2}[\/.]\d{2}[\/.]\d{4}$/.test(d)) {
-      const parts = d.split(/[\/.]/)
+    if (/^\d{2}[/.]\d{2}[/.]\d{4}$/.test(d)) {
+      const parts = d.split(/[/.]/)
       return parts[2] + '-' + parts[1] + '-' + parts[0]
     }
     return d

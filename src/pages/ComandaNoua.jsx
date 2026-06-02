@@ -50,26 +50,23 @@ export default function ComandaNoua() {
     p.activ && (marciPermise.length === 0 || marciPermise.includes(p.marca))
   )
 
-  const [cart, setCart] = useState({}) // { productId: { cantitate, unitateSel } }
+  const [cart, setCart] = useState(() => {
+    if (!location.state?.reorder) return {}
+    const initial = {}
+    location.state.reorder.lines.forEach(l => {
+      const prod = db.products.find(p => p.id === l.productId)
+      initial[l.productId] = {
+        cantitate: l.cantitate,
+        unitateSel: l.unitateSel || prod?.unitateTertiara || prod?.unitate || 'rolă'
+      }
+    })
+    return initial
+  })
   const [dataLivrare, setDataLivrare] = useState('')
   const [observatii, setObservatii] = useState('')
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState(null)
   const [confirming, setConfirming] = useState(false)
-
-  useEffect(() => {
-    if (location.state?.reorder) {
-      const newCart = {}
-      location.state.reorder.lines.forEach(l => {
-        const prod = db.products.find(p => p.id === l.productId)
-        newCart[l.productId] = {
-          cantitate: l.cantitate,
-          unitateSel: l.unitateSel || prod?.unitateTertiara || prod?.unitate || 'rolă'
-        }
-      })
-      setCart(newCart)
-    }
-  }, [location.state])
 
   function setQty(productId, val, unitateSel) {
     const qty = Math.max(0, parseInt(val) || 0)
@@ -111,8 +108,8 @@ export default function ComandaNoua() {
   }, [cart, db])
 
   const { liniiCalculate, discountLinii, totalBrut, totalDiscount, totalNet } = useMemo(() =>
-    calculeazaCos(liniiMotor, firma, db),
-    [liniiMotor, firma, db]
+    calculeazaCos(liniiMotor, db.firms.find(f => f.id === user.firmId), db),
+    [liniiMotor, db, user.firmId]
   )
 
   const tvaVal = Math.round(totalNet * TVA * 100) / 100
@@ -120,8 +117,8 @@ export default function ComandaNoua() {
 
   // Notificări promoții
   const notificari = useMemo(() =>
-    getPromotiiNotificabile(liniiMotor, firma, db),
-    [liniiMotor, firma, db]
+    getPromotiiNotificabile(liniiMotor, db.firms.find(f => f.id === user.firmId), db),
+    [liniiMotor, db, user.firmId]
   )
 
   const filtered = produse.filter(p =>

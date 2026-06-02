@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { useNavigate } from 'react-router-dom'
@@ -26,28 +26,24 @@ export default function AdminOferte() {
 
   const offers = (db.offers || []).filter(o => filter === 'toate' || o.status === filter)
 
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500) }
+  const showToast = useCallback((msg) => { setToast(msg); setTimeout(() => setToast(null), 2500) }, [])
 
-  function handleCopy(offer) {
+  const handleCopy = useCallback((offer) => {
+    const now = Date.now()
+    const rand = Math.floor(Math.random() * 900) + 100
     const newOffer = {
       ...JSON.parse(JSON.stringify(offer)),
-      id: 'of' + Date.now(),
-      nr: 'OF-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 900) + 100),
-      dataEmitere: new Date().toISOString().split('T')[0],
-      dataExpirare: new Date(Date.now() + (offer.valabilitate || 15) * 86400000).toISOString().split('T')[0],
+      id: 'of' + now,
+      nr: 'OF-' + new Date(now).getFullYear() + '-' + String(rand),
+      dataEmitere: new Date(now).toISOString().split('T')[0],
+      dataExpirare: new Date(now + (offer.valabilitate || 15) * 86400000).toISOString().split('T')[0],
       status: 'emisa',
       firmId: '',
       clientName: '',
     }
     saveOffer(newOffer)
     showToast('Ofertă copiată! O găsești în lista de mai jos.')
-  }
-
-  function handleConvertToOrder(offer) {
-    // Navigate to comanda noua cu datele din ofertă
-    navigate('/admin/comenzi', { state: { fromOffer: offer } })
-    showToast('Ofertă convertită în comandă!')
-  }
+  }, [saveOffer, showToast])
 
   function handleStatusChange(offerId, status) {
     updateOfferStatus(offerId, status)
