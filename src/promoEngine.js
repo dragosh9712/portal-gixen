@@ -10,7 +10,7 @@ function normalizeDate(d) {
   // YYYY-MM-DD → ok
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
   // DD/MM/YYYY sau DD.MM.YYYY
-  const m = d.match(/^(\d{2})[\/\.](\d{2})[\/\.](\d{4})$/)
+  const m = d.match(/^(\d{2})[/.](\d{2})[/.](\d{4})$/)
   if (m) return `${m[3]}-${m[2]}-${m[1]}`
   return d
 }

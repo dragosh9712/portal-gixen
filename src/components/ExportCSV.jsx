@@ -1,4 +1,3 @@
-import { lei, fmtDate } from '../utils'
 
 export default function ExportCSV({ orders, firms, products, filename = 'comenzi' }) {
   function handleExport() {

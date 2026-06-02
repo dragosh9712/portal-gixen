@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
-import { calculeazaCos, getTierPret } from '../promoEngine.js'
+import { calculeazaCos } from '../promoEngine.js'
 import { lei, calcLinePrice } from '../utils'
 
 const TVA = 0.21
@@ -96,8 +95,6 @@ function ClientField({ f, label, ph, half, value, onChange }) {
 
 export default function AdminOferta() {
   const { db, saveOffer } = useStore()
-  const navigate = useNavigate ? useNavigate() : null
-  const previewRef = useRef()
   const [nr] = useState(genNr)
   const [valabilitate, setValabilitate] = useState(15)
   const [observatii, setObservatii] = useState('Prețurile includ discount de volum pentru cantitățile specificate. Oferta poate fi negociată suplimentar pentru contracte pe termen lung sau volume mai mari. Livrarea se efectuează cu mijloace proprii Gixen SRL, fără costuri suplimentare de transport.')
@@ -324,7 +321,7 @@ tbody td.center { text-align: center; }
   <div class="footer-text">${GIXEN_INFO.name} · CUI ${GIXEN_INFO.cui} · ${GIXEN_INFO.adresa} · ${GIXEN_INFO.email}</div>
   <div class="footer-text">Valabilă ${valabilitate} zile de la data emiterii.</div>
 </div>
-${forPrint ? '<script>window.onload=()=>{window.print()}<\/script>' : ''}
+${forPrint ? '<script>window.onload=()=>{window.print()}</scr' + 'ipt>' : ''}
 </body></html>`
   }
 
@@ -349,8 +346,8 @@ ${forPrint ? '<script>window.onload=()=>{window.print()}<\/script>' : ''}
           valoare: -(l.pretBaza - l.pretFinal) * l.cantitate
         } : null)
         .filter(Boolean),
-      totalBrut: subBaza,
-      totalDiscount: -(subBaza - totalNet),
+      totalBrut: subBaza2,
+      totalDiscount: -(subBaza2 - totalNet),
       totalNet,
       tva: tvaVal,
       totalCuTva,
@@ -474,8 +471,8 @@ ${forPrint ? '<script>window.onload=()=>{window.print()}<\/script>' : ''}
           {/* Summary */}
           <div className="card" style={{ marginBottom: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 16px', fontSize: 12 }}>
-              <span style={{ color: 'var(--text2)' }}>Subtotal brut</span><span style={{ textAlign: 'right' }}>{lei(subBaza2||subBaza)}</span>
-              {(Math.abs(totalDiscAll)||Math.abs(totalDisc)) > 0 && <><span style={{ color: 'var(--green-text)', fontWeight: 500 }}>Total reduceri</span><span style={{ textAlign: 'right', color: 'var(--green-text)', fontWeight: 500 }}>-{lei(Math.abs(totalDiscAll)||Math.abs(totalDisc))}</span></>}
+              <span style={{ color: 'var(--text2)' }}>Subtotal brut</span><span style={{ textAlign: 'right' }}>{lei(subBaza2)}</span>
+              {Math.abs(totalDiscAll) > 0 && <><span style={{ color: 'var(--green-text)', fontWeight: 500 }}>Total reduceri</span><span style={{ textAlign: 'right', color: 'var(--green-text)', fontWeight: 500 }}>-{lei(Math.abs(totalDiscAll))}</span></>}
               <span style={{ color: 'var(--text2)' }}>Total net (fără TVA)</span><span style={{ textAlign: 'right', fontWeight: 600 }}>{lei(totalNetAll||totalNet)}</span>
               <span style={{ color: 'var(--text2)' }}>TVA {Math.round(TVA*100)}%</span><span style={{ textAlign: 'right' }}>{lei(tvaValAll||tvaVal)}</span>
               <div style={{ gridColumn: 'span 2', height: 1, background: 'var(--border)', margin: '4px 0' }} />
