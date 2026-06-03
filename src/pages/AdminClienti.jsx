@@ -1,108 +1,177 @@
 import { useState } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
-import { statusBadge, lei, fmtDate } from '../utils'
+import { statusBadge, lei, fmtDate, fmtDateTime, getInitials } from '../utils'
+import api from '../api'
 
 function Toast({ msg, type, onDone }) {
   return <div className={`toast ${type}`} onClick={onDone} style={{ cursor: 'pointer' }}>{msg}</div>
 }
 
 export default function AdminClienti() {
-  const { db, approveFirm, rejectFirm, updateFirm, setClientPricing } = useStore()
+  const {
+    db, approveFirm, rejectFirm, updateFirm,
+    setClientPricing, addDelegate, updateDelegate, deactivateDelegate,
+    generateOnboardingToken, getCreditLimit, syncClientsFromSelectSoft,
+    createClientInSelectSoft, syncCreditFromSelectSoft, getSurveyResult,
+    saveCommissionRule, addDeliveryLocation, removeDeliveryLocation
+  } = useStore()
+
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('info')
   const [editForm, setEditForm] = useState(null)
   const [toast, setToast] = useState(null)
   const [filterStatus, setFilterStatus] = useState('toate')
+  const [filterAgent, setFilterAgent] = useState('toate')
+  const [search, setSearch] = useState('')
+  const [addDelegateOpen, setAddDelegateOpen] = useState(false)
+  const [delegateForm, setDelegateForm] = useState({ name: '', email: '', password: 'welcome123', can_place_orders: true })
+  const [creditEditMode, setCreditEditMode] = useState(false)
+  const [creditForm, setCreditForm] = useState({})
+  const [resetPwModal, setResetPwModal] = useState(null)
+  const [resetPwInput, setResetPwInput] = useState('')
 
-  const firms = db.firms.filter(f => filterStatus === 'toate' || f.status === filterStatus)
-  const allMarci = [...new Set(db.products.map(p => p.marca).filter(Boolean))]
+  const firms = (db.firms || []).filter(f => {
+    const matchStatus = filterStatus === 'toate' || f.status === filterStatus
+    const matchAgent = filterAgent === 'toate' || f.agent_id === filterAgent
+    const q = search.toLowerCase()
+    return matchStatus && matchAgent && (!q || f.name.toLowerCase().includes(q) || (f.cui || '').includes(q) || (f.email || '').toLowerCase().includes(q))
+  })
+
+  const agents = db.agents || []
+  const allMarci = [...new Set((db.products || []).map(p => p.marca).filter(Boolean))]
 
   function openClient(firm) {
     setSelected(firm)
-    setEditForm({ ...firm, marciPermise: firm.marciPermise || [], grupClient: firm.grupClient || 'standard' })
+    setEditForm({ ...firm })
     setTab('info')
+    setCreditEditMode(false)
+    const cl = getCreditLimit(firm.id)
+    setCreditForm(cl ? { ...cl } : { credit_limit: 0, limit_currency: firm.currency || 'RON', notification_threshold_pct: 80, block_on_exceed: false })
   }
+
+  function showToast(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 2500) }
 
   function handleSave() {
     updateFirm(selected.id, editForm)
-    showToast('Date salvate!', 'success')
     setSelected({ ...selected, ...editForm })
+    showToast('Date salvate!')
   }
 
-  function handleApprove(firmId) { approveFirm(firmId); showToast('Client aprobat!', 'success'); setSelected(null) }
-  function handleReject(firmId)  { rejectFirm(firmId);  showToast('Client respins.', 'error');  setSelected(null) }
+  function handleApprove(firmId) { approveFirm(firmId); showToast('Client aprobat!'); setSelected(null) }
+  function handleReject(firmId) { rejectFirm(firmId); showToast('Client respins.', 'error'); setSelected(null) }
 
   function toggleMarca(marca) {
     const prev = editForm.marciPermise || []
-    setEditForm({
-      ...editForm,
-      marciPermise: prev.includes(marca) ? prev.filter(m => m !== marca) : [...prev, marca]
-    })
+    setEditForm({ ...editForm, marciPermise: prev.includes(marca) ? prev.filter(m => m !== marca) : [...prev, marca] })
   }
 
-  function showToast(msg, type) { setToast({ msg, type }); setTimeout(() => setToast(null), 2500) }
+  function handleAddDelegate() {
+    addDelegate(selected.id, delegateForm)
+    setAddDelegateOpen(false)
+    setDelegateForm({ name: '', email: '', password: 'welcome123', can_place_orders: true })
+    showToast('Delegat adăugat!')
+  }
 
-  const clientOrders = selected ? db.orders.filter(o => o.firmId === selected.id) : []
+  function handleGenerateLink(userId) {
+    const token = generateOnboardingToken(userId)
+    const link = `${window.location.origin}/onboarding?token=${token}`
+    navigator.clipboard?.writeText(link)
+    showToast('Link copiat!')
+  }
+
+  // Bug 1: Salvare credit limit editabil
+  function handleSaveCreditLimit() {
+    if (!selected) return
+    saveCreditLimit(selected.id, {
+      credit_limit: parseFloat(creditForm.credit_limit) || 0,
+      limit_currency: creditForm.limit_currency || 'RON',
+      notification_threshold_pct: parseInt(creditForm.notification_threshold_pct) || 80,
+      block_on_exceed: creditForm.block_on_exceed || false,
+      used_credit: getCreditLimit(selected.id)?.used_credit || 0,
+    })
+    setCreditEditMode(false)
+    showToast('Limită credit salvată!')
+  }
+
+  const clientDelegates = selected ? (db.users || []).filter(u => u.firmId === selected.id && u.status !== 'inactive') : []
+  const clientOrders = selected ? (db.orders || []).filter(o => o.firmId === selected.id) : []
+  const creditLimit = selected ? getCreditLimit(selected.id) : null
+  const clientPricing = selected ? (db.clientPricing || []).filter(c => c.firmId === selected.id) : []
+  const surveyResult = selected ? getSurveyResult(selected.id) : null
+  const creditPct = creditLimit?.credit_limit > 0 ? Math.round((creditLimit.used_credit / creditLimit.credit_limit) * 100) : 0
+
+  const TABS = [
+    { id: 'info', label: 'Date firmă' },
+    { id: 'delegati', label: `Delegați (${clientDelegates.length})` },
+    { id: 'preturi', label: 'Prețuri' },
+    { id: 'credit', label: '💳 Credit' },
+    { id: 'livrare', label: `Locații (${(selected?.delivery_locations || []).length + 1})` },
+    { id: 'comenzi', label: `Comenzi (${clientOrders.length})` },
+    { id: 'survey', label: surveyResult ? '✓ Survey' : 'Survey' },
+  ]
 
   return (
-    <Layout title="Gestiune clienți">
+    <Layout title="Gestiune clienți" actions={
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-secondary btn-sm" onClick={() => showToast('⚡ ' + syncClientsFromSelectSoft().message)}>🔄 Sync SS</button>
+      </div>
+    }>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="flex gap-8">
+      {/* Filtre */}
+      <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <input type="text" placeholder="Caută firmă, CUI, email..." style={{ flex: 1, minWidth: 200 }} value={search} onChange={e => setSearch(e.target.value)} />
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="toate">Toate statusurile</option>
             <option value="activ">Activi</option>
             <option value="in_aprobare">În aprobare</option>
             <option value="respinsa">Respinși</option>
           </select>
+          <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>
+            <option value="toate">Toți agenții</option>
+            {agents.filter(a => a.is_active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
         </div>
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text3)' }}>{firms.length} clienți afișați</div>
       </div>
 
       <div className="card">
         <div className="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Firmă</th><th>CUI</th><th>Email</th>
-                <th>Grup</th><th>Mărci permise</th>
-                <th>Disc. global</th><th>Comenzi</th><th>Status</th><th></th>
-              </tr>
+              <tr><th>Firmă</th><th>Agent</th><th>Val.</th><th>Transport</th><th>Comenzi</th><th>SS</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               {firms.map(firm => {
-                const user = db.users.find(u => u.firmId === firm.id)
-                const orderCount = db.orders.filter(o => o.firmId === firm.id).length
+                const agent = agents.find(a => a.id === firm.agent_id)
+                const orderCount = (db.orders || []).filter(o => o.firmId === firm.id).length
+                const cl = getCreditLimit(firm.id)
+                const clPct = cl?.credit_limit > 0 ? Math.round((cl.used_credit / cl.credit_limit) * 100) : null
                 return (
                   <tr key={firm.id} style={{ cursor: 'pointer' }} onClick={() => openClient(firm)}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{firm.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{user?.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{firm.cui} · {firm.email}</div>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text2)' }}>{firm.cui}</td>
-                    <td style={{ fontSize: 12 }}>{firm.email}</td>
+                    <td style={{ fontSize: 12 }}>{agent?.name || '—'}</td>
                     <td>
-                      <span className={`badge ${firm.grupClient === 'platinum' ? 'badge-purple' : firm.grupClient === 'gold' ? 'badge-orange' : 'badge-gray'}`}>
-                        {firm.grupClient || 'standard'}
-                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: firm.currency === 'EUR' ? '#b45309' : 'var(--text2)' }}>{firm.currency || 'RON'}</span>
                     </td>
+                    <td style={{ fontSize: 12, color: 'var(--text3)' }}>{firm.default_transport_type || '—'}</td>
+                    <td>{orderCount}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {(firm.marciPermise || []).map(m => (
-                          <span key={m} style={{ fontSize: 10, background: 'var(--blue-bg)', color: 'var(--blue-text)', padding: '1px 6px', borderRadius: 8, fontWeight: 600 }}>{m}</span>
-                        ))}
-                        {!(firm.marciPermise?.length) && <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
-                      </div>
+                      {firm.selectsoft_cod_parten
+                        ? <span style={{ fontSize: 11, color: 'var(--green-text)' }}>✓</span>
+                        : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
                     </td>
-                    <td><span style={{ color: 'var(--green)', fontWeight: 500 }}>{firm.discountGlobal || 0}%</span></td>
-                    <td style={{ color: 'var(--text2)' }}>{orderCount}</td>
-                    <td>{statusBadge(firm.status === 'activ' ? 'activ' : firm.status)}</td>
-                    <td onClick={e => e.stopPropagation()}>
+                    <td>{statusBadge(firm.status)}</td>
+                    <td>
                       {firm.status === 'in_aprobare' && (
-                        <div className="flex gap-8">
-                          <button className="btn btn-success btn-sm" onClick={() => handleApprove(firm.id)}>✓ Aprobă</button>
-                          <button className="btn btn-danger btn-sm" onClick={() => handleReject(firm.id)}>✗</button>
+                        <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                          <button className="btn btn-success btn-sm" onClick={() => handleApprove(firm.id)}>✓</button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleReject(firm.id)}>✕</button>
                         </div>
                       )}
                     </td>
@@ -114,204 +183,410 @@ export default function AdminClienti() {
         </div>
       </div>
 
-      {/* Modal client */}
+      {/* Panel lateral */}
       {selected && editForm && (
-        <div className="modal-overlay" onClick={() => setSelected(null)}>
-          <div className="modal" style={{ width: 600 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr">
-              <h3>{selected.name}</h3>
-              <button className="modal-close" onClick={() => setSelected(null)}>×</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 50, display: 'flex', justifyContent: 'flex-end' }} onClick={() => setSelected(null)}>
+          <div style={{ width: 700, background: 'var(--white)', height: '100%', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)' }}>{selected.cui} · {agents.find(a => a.id === selected.agent_id)?.name || '—'}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {statusBadge(selected.status)}
+                {!selected.selectsoft_cod_parten && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => showToast('⚡ ' + createClientInSelectSoft(selected.id).message)}>📤 Creează în SS</button>
+                )}
+                <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
+              </div>
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-              {[['info','Date firmă'], ['preturi','Prețuri & discounturi'], ['comenzi','Comenzi']].map(([t, l]) => (
-                <button key={t} className="btn btn-sm"
-                  style={{ background: tab === t ? 'var(--blue-bg)' : 'var(--bg)', color: tab === t ? 'var(--blue-text)' : 'var(--text2)', fontWeight: tab === t ? 600 : 400 }}
-                  onClick={() => setTab(t)}>{l}</button>
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 24px', overflowX: 'auto' }}>
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  style={{ padding: '10px 12px', background: 'none', border: 'none', borderBottom: tab === t.id ? '2px solid var(--blue)' : '2px solid transparent', color: tab === t.id ? 'var(--blue)' : 'var(--text2)', fontWeight: tab === t.id ? 600 : 400, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {t.label}
+                </button>
               ))}
             </div>
 
-            {/* ── TAB: Date firmă ── */}
-            {tab === 'info' && (
-              <>
-                {selected.status === 'in_aprobare' && (
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, padding: 12, background: 'var(--orange-bg)', borderRadius: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, flex: 1 }}>⏳ Cont în așteptarea aprobării</span>
-                    <button className="btn btn-success btn-sm" onClick={() => handleApprove(selected.id)}>✓ Aprobă</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleReject(selected.id)}>✗ Respinge</button>
-                  </div>
-                )}
+            <div style={{ padding: '20px 24px' }}>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Denumire</label>
-                    <input className="w-full" value={editForm.name || ''} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>CUI</label>
-                    <input className="w-full" value={editForm.cui || ''} onChange={e => setEditForm({ ...editForm, cui: e.target.value })} />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Reg. Com.</label>
-                    <input className="w-full" value={editForm.regCom || ''} onChange={e => setEditForm({ ...editForm, regCom: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Discount global (%)</label>
-                    <input type="number" className="w-full" min={0} max={50}
-                      value={editForm.discountGlobal || 0}
-                      onChange={e => setEditForm({ ...editForm, discountGlobal: parseInt(e.target.value) || 0 })} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Adresă</label>
-                  <input className="w-full" value={editForm.adresa || ''} onChange={e => setEditForm({ ...editForm, adresa: e.target.value })} />
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Email</label>
-                    <input className="w-full" value={editForm.email || ''} onChange={e => setEditForm({ ...editForm, email: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Telefon</label>
-                    <input className="w-full" value={editForm.telefon || ''} onChange={e => setEditForm({ ...editForm, telefon: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="divider" />
-
-                {/* Grup client */}
-                <div className="form-group">
-                  <label>Grup client</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {['standard', 'gold', 'platinum'].map(g => (
-                      <button key={g} type="button"
-                        onClick={() => setEditForm({ ...editForm, grupClient: g })}
-                        className="btn btn-sm"
-                        style={{
-                          background: editForm.grupClient === g
-                            ? (g === 'platinum' ? 'var(--purple-bg)' : g === 'gold' ? 'var(--orange-bg)' : 'var(--blue-bg)')
-                            : 'var(--bg)',
-                          color: editForm.grupClient === g
-                            ? (g === 'platinum' ? 'var(--purple-text)' : g === 'gold' ? 'var(--orange-text)' : 'var(--blue-text)')
-                            : 'var(--text2)',
-                          border: '1px solid var(--border)',
-                          fontWeight: editForm.grupClient === g ? 700 : 400,
-                          textTransform: 'capitalize',
-                        }}>
-                        {g === 'gold' ? '⭐ Gold' : g === 'platinum' ? '💎 Platinum' : '👤 Standard'}
-                      </button>
+              {/* ── DATE FIRMĂ ── */}
+              {tab === 'info' && (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    {[['Denumire', 'name'], ['CUI', 'cui'], ['Reg. Com.', 'regCom'], ['Email', 'email'], ['Telefon', 'telefon'], ['IBAN', 'iban'], ['Bancă', 'banca'], ['Site web', 'site_web']].map(([label, key]) => (
+                      <div key={key} className="form-group" style={{ marginBottom: 0 }}>
+                        <label>{label}</label>
+                        <input className="w-full" value={editForm[key] || ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))} />
+                      </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-                    Grupul activează regulile de promoție configurate pentru acel grup
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Agent</label>
+                      <select className="w-full" value={editForm.agent_id || ''} onChange={e => setEditForm(p => ({ ...p, agent_id: e.target.value }))}>
+                        {agents.filter(a => a.is_active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Valută</label>
+                      <select className="w-full" value={editForm.currency || 'RON'} onChange={e => setEditForm(p => ({ ...p, currency: e.target.value }))}>
+                        <option value="RON">RON</option>
+                        <option value="EUR">EUR</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Grup client</label>
+                      <select className="w-full" value={editForm.grupClient || 'standard'} onChange={e => setEditForm(p => ({ ...p, grupClient: e.target.value }))}>
+                        <option value="standard">Standard</option>
+                        <option value="gold">Gold</option>
+                        <option value="platinum">Platinum</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Transport default</label>
+                      <select className="w-full" value={editForm.default_transport_type || 'Van'} onChange={e => setEditForm(p => ({ ...p, default_transport_type: e.target.value }))}>
+                        <option value="Van">Duba (Van)</option>
+                        <option value="Truck">TIR (Camion)</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Discount global %</label>
+                      <input type="number" min={0} max={50} className="w-full" value={editForm.discountGlobal || 0} onChange={e => setEditForm(p => ({ ...p, discountGlobal: parseFloat(e.target.value) || 0 }))} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Plătitor TVA</label>
+                      <select className="w-full" value={editForm.platitor_tva ? '1' : '0'} onChange={e => setEditForm(p => ({ ...p, platitor_tva: e.target.value === '1' }))}>
+                        <option value="1">Da</option>
+                        <option value="0">Nu</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
-
-                {/* Mărci permise */}
-                <div className="form-group">
-                  <label>Mărci permise</label>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                    {allMarci.map(marca => {
-                      const active = (editForm.marciPermise || []).includes(marca)
-                      return (
-                        <label key={marca} onClick={() => toggleMarca(marca)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                            background: active ? 'var(--blue-bg)' : 'var(--bg)',
-                            border: `1px solid ${active ? 'var(--blue)' : 'var(--border)'}`,
-                            borderRadius: 8, padding: '6px 14px', fontSize: 13,
-                            color: active ? 'var(--blue-text)' : 'var(--text2)',
-                            fontWeight: active ? 600 : 400,
-                            transition: 'all 0.15s',
-                            userSelect: 'none',
-                          }}>
-                          <input type="checkbox" checked={active} onChange={() => {}} style={{ accentColor: 'var(--blue)' }} />
-                          {marca}
+                  <div className="form-group">
+                    <label>Mărci permise</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      {allMarci.map(m => (
+                        <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, padding: '3px 10px', borderRadius: 20, background: (editForm.marciPermise || []).includes(m) ? 'var(--blue-bg)' : 'var(--bg3)', border: '1px solid ' + ((editForm.marciPermise || []).includes(m) ? 'var(--blue)' : 'var(--border)'), color: (editForm.marciPermise || []).includes(m) ? 'var(--blue-text)' : 'var(--text2)' }}>
+                          <input type="checkbox" checked={(editForm.marciPermise || []).includes(m)} onChange={() => toggleMarca(m)} style={{ width: 12, height: 12 }} />
+                          {m}
                         </label>
-                      )
-                    })}
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-                    Clientul vede în portal <b>doar produsele din mărcile bifate</b>.
-                    {editForm.marciPermise?.length > 0 && (
-                      <span style={{ color: 'var(--blue-text)' }}> Selectate: {editForm.marciPermise.join(', ')}</span>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="btn btn-primary" onClick={handleSave}>Salvează</button>
+                    {selected.status === 'in_aprobare' && (
+                      <>
+                        <button className="btn btn-success" onClick={() => handleApprove(selected.id)}>✓ Aprobă</button>
+                        <button className="btn btn-danger" onClick={() => handleReject(selected.id)}>✕ Respinge</button>
+                      </>
                     )}
                   </div>
                 </div>
-              </>
-            )}
-
-            {/* ── TAB: Prețuri & discounturi ── */}
-            {tab === 'preturi' && (
-              <>
-                <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 12, padding: '8px 12px', background: 'var(--blue-bg)', borderRadius: 8 }}>
-                  Discount extra per produs — se aplică peste tier pricing și discount global.
-                  Completează 0 pentru a elimina discountul.
-                </div>
-                <table>
-                  <thead>
-                    <tr><th>Produs</th><th>Marcă</th><th>Preț bază</th><th>Disc. extra (%)</th><th>Preț final</th></tr>
-                  </thead>
-                  <tbody>
-                    {db.products.filter(p => p.activ).map(p => {
-                      const cp = db.clientPricing.find(c => c.firmId === selected.id && c.productId === p.id)
-                      const disc = cp?.discountExtra || 0
-                      const pretFinal = p.pretBaza * (1 - disc / 100) * (1 - (selected.discountGlobal || 0) / 100)
-                      return (
-                        <tr key={p.id}>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              {p.imagine && <img src={p.imagine} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} onError={e => e.target.style.display='none'} />}
-                              <span style={{ fontSize: 12 }}>{p.name}</span>
-                            </div>
-                          </td>
-                          <td style={{ fontSize: 11, color: 'var(--text3)' }}>{p.marca}</td>
-                          <td style={{ fontSize: 12 }}>{lei(p.pretBaza)}</td>
-                          <td>
-                            <input type="number" min={0} max={50} style={{ width: 70, textAlign: 'center', fontSize: 12 }}
-                              defaultValue={disc}
-                              onBlur={e => setClientPricing(selected.id, p.id, parseInt(e.target.value) || 0)} />
-                          </td>
-                          <td style={{ fontSize: 12, fontWeight: 600, color: disc > 0 ? 'var(--green-text)' : 'var(--text)' }}>
-                            {lei(pretFinal)}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {/* ── TAB: Comenzi ── */}
-            {tab === 'comenzi' && (
-              clientOrders.length === 0
-                ? <div className="empty-state"><div className="empty-state-icon">📦</div><div className="empty-state-title">Nicio comandă</div></div>
-                : (
-                  <table>
-                    <thead><tr><th>Nr.</th><th>Data</th><th>Valoare</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {clientOrders.map(o => (
-                        <tr key={o.id}>
-                          <td><b>{o.nr}</b></td>
-                          <td style={{ fontSize: 12 }}>{fmtDate(o.dataComanda)}</td>
-                          <td>{lei(o.total)}</td>
-                          <td>{statusBadge(o.status)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )
-            )}
-
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelected(null)}>Anulează</button>
-              {tab !== 'comenzi' && (
-                <button className="btn btn-primary" onClick={handleSave}>Salvează</button>
               )}
+
+              {/* ── DELEGAȚI ── */}
+              {tab === 'delegati' && (
+                <div>
+                  <div className="flex-between" style={{ marginBottom: 14 }}>
+                    <div className="section-title">Utilizatori cont</div>
+                    <button className="btn btn-primary btn-sm" onClick={() => setAddDelegateOpen(true)}>+ Adaugă</button>
+                  </div>
+                  {clientDelegates.map(u => (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 8, marginBottom: 8, border: '1px solid var(--border)' }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: u.delegate_type === 'primary' ? 'var(--blue)' : 'var(--bg3)', color: u.delegate_type === 'primary' ? '#fff' : 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>{getInitials(u.name)}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500, fontSize: 13 }}>{u.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{u.email}</div>
+                        <div style={{ fontSize: 11, color: u.can_place_orders ? 'var(--green-text)' : 'var(--text3)' }}>{u.can_place_orders ? '✓ Poate comanda' : '✗ Doar vizualizare'}</div>
+                      </div>
+                      {statusBadge(u.delegate_type)}
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => handleGenerateLink(u.id)}>🔗</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { updateDelegate(u.id, { can_place_orders: !u.can_place_orders }); showToast('Actualizat!') }}>{u.can_place_orders ? '🔒' : '🔓'}</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setResetPwModal(u.id)}>🔑 Reset parolă</button>
+                        {u.delegate_type !== 'primary' && <button className="btn btn-danger btn-sm" onClick={() => { deactivateDelegate(u.id); showToast('Dezactivat!') }}>✕</button>}
+                      </div>
+                    </div>
+                  ))}
+                  {addDelegateOpen && (
+                    <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 16, border: '1px solid var(--border)', marginTop: 12 }}>
+                      <div className="section-title" style={{ marginBottom: 12 }}>Delegat nou</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        {[['Nume complet', 'name', 'text'], ['Email', 'email', 'email'], ['Parolă inițială', 'password', 'text']].map(([l, k, t]) => (
+                          <div key={k} className="form-group" style={{ marginBottom: 0 }}>
+                            <label>{l}</label>
+                            <input type={t} className="w-full" value={delegateForm[k]} onChange={e => setDelegateForm(p => ({ ...p, [k]: e.target.value }))} />
+                          </div>
+                        ))}
+                        <div className="form-group" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
+                          <input type="checkbox" checked={delegateForm.can_place_orders} onChange={e => setDelegateForm(p => ({ ...p, can_place_orders: e.target.checked }))} />
+                          <label style={{ marginBottom: 0 }}>Poate plasa comenzi</label>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setAddDelegateOpen(false)}>Anulează</button>
+                        <button className="btn btn-primary btn-sm" onClick={handleAddDelegate}>Adaugă</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── PREȚURI ── */}
+              {tab === 'preturi' && (
+                <div>
+                  <div className="section-title" style={{ marginBottom: 8 }}>Discount suplimentar per produs</div>
+                  <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>Se aplică peste prețul cu marja agentului.</p>
+                  <div className="table-wrap">
+                    <table>
+                      <thead><tr><th>Produs</th><th style={{ width: 120 }}>Discount %</th><th style={{ width: 80 }}>Status</th></tr></thead>
+                      <tbody>
+                        {(db.products || []).filter(p => p.activ).slice(0, 50).map(product => {
+                          const cp = clientPricing.find(c => c.productId === product.id)
+                          return (
+                            <tr key={product.id}>
+                              <td style={{ fontSize: 12 }}>{product.name.length > 60 ? product.name.slice(0, 60) + '…' : product.name}</td>
+                              <td>
+                                <input type="number" min={0} max={50} step={0.5} placeholder="0"
+                                  defaultValue={cp?.discountExtra || ''}
+                                  style={{ width: 70, fontSize: 12, padding: '3px 8px' }}
+                                  onBlur={e => { setClientPricing(selected.id, product.id, parseFloat(e.target.value) || 0); showToast('Salvat!') }} />
+                                <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>%</span>
+                              </td>
+                              <td>{cp?.discountExtra > 0 && <span style={{ fontSize: 11, color: 'var(--green-text)' }}>−{cp.discountExtra}%</span>}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── CREDIT LIMIT — Bug 1: EDITABIL ── */}
+              {tab === 'credit' && (
+                <div>
+                  <div className="flex-between" style={{ marginBottom: 16 }}>
+                    <div className="section-title">Limită credit</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => { syncCreditFromSelectSoft(selected.id); showToast('⚡ Sync placeholder') }}>🔄 Sync SS</button>
+                      {!creditEditMode
+                        ? <button className="btn btn-primary btn-sm" onClick={() => setCreditEditMode(true)}>✏ Editează</button>
+                        : <button className="btn btn-success btn-sm" onClick={handleSaveCreditLimit}>✓ Salvează</button>
+                      }
+                    </div>
+                  </div>
+
+                  {creditEditMode ? (
+                    /* ── EDIT MODE ── */
+                    <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 16, border: '1px solid var(--blue)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Limită credit</label>
+                          <input type="number" min={0} step={1000} className="w-full"
+                            value={creditForm.credit_limit || 0}
+                            onChange={e => setCreditForm(p => ({ ...p, credit_limit: parseFloat(e.target.value) || 0, available_credit: Math.max(0, parseFloat(e.target.value) - (p.used_credit || 0)) }))} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Monedă limită</label>
+                          <select className="w-full" value={creditForm.limit_currency || 'RON'} onChange={e => setCreditForm(p => ({ ...p, limit_currency: e.target.value }))}>
+                            <option value="RON">RON</option>
+                            <option value="EUR">EUR</option>
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Notificare la % utilizat</label>
+                          <input type="number" min={10} max={100} step={5} className="w-full"
+                            value={creditForm.notification_threshold_pct || 80}
+                            onChange={e => setCreditForm(p => ({ ...p, notification_threshold_pct: parseInt(e.target.value) || 80 }))} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
+                          <input type="checkbox" checked={creditForm.block_on_exceed || false}
+                            onChange={e => setCreditForm(p => ({ ...p, block_on_exceed: e.target.checked }))} />
+                          <div>
+                            <label style={{ marginBottom: 0 }}>Blochează comanda la depășire</label>
+                            <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
+                              {creditForm.block_on_exceed ? 'La depășire se generează proformă și comanda intră în așteptare' : 'La depășire se afișează doar avertisment'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <button className="btn btn-secondary btn-sm" onClick={() => { setCreditEditMode(false); const cl = getCreditLimit(selected.id); setCreditForm(cl || {}) }}>Anulează</button>
+                    </div>
+                  ) : (
+                    /* ── VIEW MODE ── */
+                    creditLimit && creditLimit.credit_limit > 0 ? (
+                      <div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+                          {[['Limită', lei(creditLimit.credit_limit)], ['Utilizat', lei(creditLimit.used_credit)], ['Disponibil', lei(creditLimit.available_credit)]].map(([l, v], i) => (
+                            <div key={l} style={{ background: i === 2 && creditPct >= 90 ? 'var(--red-bg)' : i === 1 && creditPct >= 80 ? 'var(--orange-bg)' : 'var(--bg)', borderRadius: 8, padding: '12px', textAlign: 'center' }}>
+                              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>{l}</div>
+                              <div style={{ fontWeight: 700, fontSize: 14, color: i === 2 && creditPct >= 90 ? 'var(--red-text)' : i === 1 && creditPct >= 80 ? 'var(--orange-text)' : 'inherit' }}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>
+                            <span>Utilizare credit</span><span style={{ fontWeight: 600, color: creditPct >= 80 ? 'var(--orange-text)' : 'inherit' }}>{creditPct}%</span>
+                          </div>
+                          <div style={{ height: 8, background: 'var(--bg3)', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(creditPct, 100)}%`, background: creditPct >= 90 ? 'var(--red-text)' : creditPct >= 80 ? '#f59e0b' : 'var(--green)', borderRadius: 4, transition: 'width 0.3s' }} />
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+                          Notificare la: <strong>{creditLimit.notification_threshold_pct}%</strong> ·
+                          La depășire: <strong style={{ color: creditLimit.block_on_exceed ? 'var(--red-text)' : 'var(--green-text)' }}>{creditLimit.block_on_exceed ? 'Blochează + Proformă' : 'Doar avertisment'}</strong>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '20px', textAlign: 'center', color: 'var(--text3)' }}>
+                        <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
+                        <div style={{ fontSize: 13, marginBottom: 12 }}>Nicio limită de credit configurată.</div>
+                        <button className="btn btn-primary btn-sm" onClick={() => setCreditEditMode(true)}>Configurează limită</button>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+
+              {/* ── LOCAȚII LIVRARE ── */}
+              {tab === 'livrare' && (
+                <div>
+                  <div className="flex-between" style={{ marginBottom: 14 }}>
+                    <div className="section-title">Puncte de livrare</div>
+                    <button className="btn btn-primary btn-sm" onClick={() => {
+                      addDeliveryLocation(selected.id, { name: 'Locație nouă', adresa: '', program: '', contact_name: '', contact_phone: '' })
+                      setSelected(prev => ({ ...prev, delivery_locations: [...(prev.delivery_locations || []), { id: 'new_' + Date.now(), name: 'Locație nouă', adresa: '' }] }))
+                      showToast('Locație adăugată!')
+                    }}>+ Adaugă locație</button>
+                  </div>
+
+                  <div style={{ padding: '10px 14px', background: 'var(--blue-bg)', borderRadius: 8, marginBottom: 10, border: '1px solid rgba(37,99,235,0.1)' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>🏢 Sediu principal (implicit)</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{selected.adresa}{selected.localitate ? `, ${selected.localitate}` : ''}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>Email: {selected.email} · Tel: {selected.telefon}</div>
+                  </div>
+
+                  {(selected.delivery_locations || []).map(loc => (
+                    <div key={loc.id} style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 10, border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Denumire</label>
+                          <input className="w-full" defaultValue={loc.name} onBlur={e => showToast('Salvat!')} placeholder="Ex: Depozit Ilfov" />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Program livrare</label>
+                          <input className="w-full" defaultValue={loc.program || ''} onBlur={e => showToast('Salvat!')} placeholder="L-V 09:00-17:00" />
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 10 }}>
+                        <label>Adresă completă</label>
+                        <input className="w-full" defaultValue={loc.adresa} onBlur={e => showToast('Salvat!')} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Persoană contact</label>
+                          <input className="w-full" defaultValue={loc.contact_name || ''} onBlur={e => showToast('Salvat!')} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Telefon</label>
+                          <input className="w-full" defaultValue={loc.contact_phone || ''} onBlur={e => showToast('Salvat!')} />
+                        </div>
+                      </div>
+                      <button className="btn btn-danger btn-sm" onClick={() => {
+                        removeDeliveryLocation(selected.id, loc.id)
+                        setSelected(prev => ({ ...prev, delivery_locations: (prev.delivery_locations || []).filter(l => l.id !== loc.id) }))
+                        showToast('Locație ștearsă')
+                      }}>Șterge</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── COMENZI ── */}
+              {tab === 'comenzi' && (
+                <div>
+                  <div className="section-title" style={{ marginBottom: 12 }}>Istoricul comenzilor</div>
+                  {clientOrders.length === 0
+                    ? <div style={{ color: 'var(--text3)', fontSize: 13 }}>Nicio comandă.</div>
+                    : <div className="table-wrap">
+                        <table>
+                          <thead><tr><th>Nr.</th><th>Data</th><th>Total</th><th>Transport</th><th>Status</th></tr></thead>
+                          <tbody>
+                            {clientOrders.map(o => (
+                              <tr key={o.id}>
+                                <td style={{ fontWeight: 500 }}>{o.nr}</td>
+                                <td>{fmtDate(o.dataComanda)}</td>
+                                <td style={{ fontWeight: 600 }}>{lei(o.total)}</td>
+                                <td style={{ fontSize: 12, color: 'var(--text3)' }}>{o.transport_type || '—'}</td>
+                                <td>{statusBadge(o.status)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                  }
+                </div>
+              )}
+
+              {/* ── SURVEY ── */}
+              {tab === 'survey' && (
+                <div>
+                  {surveyResult ? (
+                    <>
+                      <div className="flex-between" style={{ marginBottom: 12 }}>
+                        <div className="section-title">Profil completat</div>
+                        <span style={{ fontSize: 12, color: 'var(--green-text)' }}>✓ {fmtDate(surveyResult.completed_at)}</span>
+                      </div>
+                      {Object.entries(surveyResult.answers || {}).map(([k, v]) => v ? (
+                        <div key={k} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid var(--border2)', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text3)', width: 200, flexShrink: 0, textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}</span>
+                          <span style={{ fontWeight: 500 }}>{v}</span>
+                        </div>
+                      ) : null)}
+                    </>
+                  ) : (
+                    <div style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
+                      <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+                      Clientul nu a completat survey-ul.
+                      <br />
+                      <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => showToast('Email trimis!')}>📧 Trimite reminder</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+      {resetPwModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="card" style={{ maxWidth: 380, width: '100%', padding: 28 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Resetează parola</h3>
+            <div className="form-group">
+              <label>Parolă nouă</label>
+              <input type="password" className="w-full" placeholder="Minim 6 caractere" value={resetPwInput} onChange={e => setResetPwInput(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setResetPwModal(null); setResetPwInput('') }}>Anulează</button>
+              <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={async () => {
+                if (!resetPwInput || resetPwInput.length < 6) { alert('Parola trebuie să aibă minim 6 caractere'); return }
+                try {
+                  await api.auth.resetPassword(resetPwModal, resetPwInput)
+                  setResetPwModal(null)
+                  setResetPwInput('')
+                  alert('Parola a fost resetată cu succes!')
+                } catch (err) {
+                  alert(err.message || 'Eroare la resetarea parolei')
+                }
+              }}>Resetează</button>
             </div>
           </div>
         </div>

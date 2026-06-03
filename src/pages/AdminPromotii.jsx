@@ -1,27 +1,26 @@
 import { useState } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
-import { lei, fmtDate } from '../utils'
+import { lei, fmtDate, statusBadge } from '../utils'
 
-// ── Rule Builder components ──
 const TIPURI_REGULA = [
   { value: 'LINE_DISCOUNT',  label: 'Discount % pe linie produs' },
   { value: 'LINE_AMOUNT',    label: 'Discount valoric (RON) pe linie' },
-  { value: 'MIX_MATCH',     label: 'Mix & Match (condiție multiplă → discount)' },
+  { value: 'MIX_MATCH',     label: 'Mix & Match' },
   { value: 'ORDER_VALUE',    label: 'Discount la valoare comandă (prag)' },
-  { value: 'ORDER_AMOUNT',   label: 'Discount fix RON pe total comandă' },
   { value: 'BUY_X_GET_Y',   label: 'Buy X Get Y (produs gratuit)' },
   { value: 'CAMPAIGN',       label: 'Campanie temporară' },
   { value: 'CATEGORY',       label: 'Discount pe categorie' },
   { value: 'BRAND',          label: 'Discount pe marcă' },
-  { value: 'FIRST_ORDER',    label: 'Prima comandă (client nou)' },
 ]
 const TIPURI_CONDITIE = [
   { value: 'produs_in_cos',              label: 'Produs în coș cu cantitate minimă' },
   { value: 'cantitate_totala_categorie', label: 'Cantitate totală din categorie' },
   { value: 'valoare_cos',               label: 'Valoare coș minimă (RON)' },
-  { value: 'grup_client',               label: 'Grup client (standard/gold/platinum)' },
-  { value: 'marca_in_cos',              label: 'Marcă în coș cu cantitate minimă' },
+  { value: 'grup_client',               label: 'Grup client' },
+  { value: 'marca_in_cos',              label: 'Marcă în coș' },
+  { value: 'cumul_comenzi_luna',        label: 'Număr comenzi în luna curentă' },
+  { value: 'cumul_valoare_luna',        label: 'Valoare cumulată luna curentă' },
 ]
 const TIPURI_ACTIUNE = [
   { value: 'discount_procent_linie',  label: 'Discount % pe produs specific' },
@@ -31,605 +30,278 @@ const TIPURI_ACTIUNE = [
   { value: 'produs_gratuit',          label: 'Produse gratuite' },
 ]
 const BAZE_CALCUL = [
-  { value: 'pret_baza',                   label: 'Preț de bază (înainte de orice discount)' },
-  { value: 'pret_dupa_discount_anterior', label: 'Preț după discounturile anterioare' },
-  { value: 'total_net',                   label: 'Total net curent al coșului' },
+  { value: 'pret_baza',                   label: 'Preț de bază' },
+  { value: 'pret_dupa_discount_anterior', label: 'Preț după discounturi anterioare' },
+  { value: 'total_net',                   label: 'Total net coș' },
 ]
+const LUNI = ['', 'Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function ConditionRow({ cond, idx, onChange, onRemove, products, categories, marci }) {
+function ConditionRow({ cond, idx, onChange, onRemove, products }) {
   return (
-    <div style={{ background: 'var(--white)', borderRadius: 8, padding: 12, marginBottom: 8, border: '1px solid var(--border)' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+    <div style={{ background:'var(--white)', borderRadius:8, padding:12, marginBottom:8, border:'1px solid var(--border)' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
         {idx > 0 && (
-          <select value={cond.operator || 'AND'} onChange={e => onChange({ ...cond, operator: e.target.value })}
-            style={{ width: 70, fontSize: 12 }}>
+          <select value={cond.operator||'AND'} onChange={e => onChange({...cond,operator:e.target.value})} style={{width:70,fontSize:12}}>
             <option value="AND">ȘI</option>
             <option value="OR">SAU</option>
           </select>
         )}
-        <select value={cond.tip} onChange={e => onChange({ ...cond, tip: e.target.value, productId: '', grup: '', categorie: '', marca: '', cantMin: 0, valoareMin: 0 })}
-          style={{ flex: 1, fontSize: 12 }}>
+        <select value={cond.tip} onChange={e => onChange({...cond,tip:e.target.value,productId:'',grup:'',cantMin:0,valoareMin:0})} style={{flex:1,fontSize:12}}>
           {TIPURI_CONDITIE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         <button onClick={onRemove} className="btn btn-danger btn-sm">✕</button>
       </div>
       {cond.tip === 'produs_in_cos' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
-          <div>
-            <label style={{ fontSize: 11 }}>Produs</label>
-            <select className="w-full" value={cond.productId || ''} onChange={e => onChange({ ...cond, productId: e.target.value })} style={{ fontSize: 12 }}>
+        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8}}>
+          <div><label style={{fontSize:11}}>Produs</label>
+            <select className="w-full" value={cond.productId||''} onChange={e=>onChange({...cond,productId:e.target.value})} style={{fontSize:12}}>
               <option value="">Selectează produs...</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: 11 }}>Cantitate minimă (role)</label>
-            <input type="number" className="w-full" min={0} value={cond.cantMin || 0} style={{ fontSize: 12 }}
-              onChange={e => onChange({ ...cond, cantMin: parseInt(e.target.value) || 0 })} />
-          </div>
-        </div>
-      )}
-      {cond.tip === 'cantitate_totala_categorie' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
-          <div>
-            <label style={{ fontSize: 11 }}>Categorie</label>
-            <select className="w-full" value={cond.categorie || ''} onChange={e => onChange({ ...cond, categorie: e.target.value })} style={{ fontSize: 12 }}>
-              <option value="">Selectează...</option>
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: 11 }}>Cantitate minimă (role)</label>
-            <input type="number" className="w-full" min={0} value={cond.cantMin || 0} style={{ fontSize: 12 }}
-              onChange={e => onChange({ ...cond, cantMin: parseInt(e.target.value) || 0 })} />
-          </div>
+              {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select></div>
+          <div><label style={{fontSize:11}}>Cant. min (role)</label>
+            <input type="number" min={0} className="w-full" value={cond.cantMin||0} onChange={e=>onChange({...cond,cantMin:parseInt(e.target.value)||0})} style={{fontSize:12,padding:'6px 8px'}}/></div>
         </div>
       )}
       {cond.tip === 'valoare_cos' && (
-        <div>
-          <label style={{ fontSize: 11 }}>Valoare minimă coș (RON)</label>
-          <input type="number" className="w-full" min={0} value={cond.valoareMin || 0} style={{ fontSize: 12 }}
-            onChange={e => onChange({ ...cond, valoareMin: parseFloat(e.target.value) || 0 })} />
-        </div>
+        <div><label style={{fontSize:11}}>Valoare minimă (RON)</label>
+          <input type="number" min={0} className="w-full" value={cond.valoareMin||0} onChange={e=>onChange({...cond,valoareMin:parseFloat(e.target.value)||0})} style={{fontSize:12,padding:'6px 8px'}}/></div>
       )}
       {cond.tip === 'grup_client' && (
-        <div>
-          <label style={{ fontSize: 11 }}>Grup client</label>
-          <select className="w-full" value={cond.grup || ''} onChange={e => onChange({ ...cond, grup: e.target.value })} style={{ fontSize: 12 }}>
+        <div><label style={{fontSize:11}}>Grup</label>
+          <select className="w-full" value={cond.grup||''} onChange={e=>onChange({...cond,grup:e.target.value})} style={{fontSize:12}}>
             <option value="">Selectează...</option>
-            {['standard','gold','platinum'].map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-        </div>
+            <option value="standard">Standard</option>
+            <option value="gold">Gold</option>
+            <option value="platinum">Platinum</option>
+          </select></div>
       )}
-      {cond.tip === 'marca_in_cos' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
-          <div>
-            <label style={{ fontSize: 11 }}>Marcă</label>
-            <select className="w-full" value={cond.marca || ''} onChange={e => onChange({ ...cond, marca: e.target.value })} style={{ fontSize: 12 }}>
-              <option value="">Selectează...</option>
-              {marci.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: 11 }}>Cantitate minimă (role)</label>
-            <input type="number" className="w-full" min={0} value={cond.cantMin || 0} style={{ fontSize: 12 }}
-              onChange={e => onChange({ ...cond, cantMin: parseInt(e.target.value) || 0 })} />
-          </div>
-        </div>
+      {cond.tip === 'cumul_comenzi_luna' && (
+        <div><label style={{fontSize:11}}>Nr. minim comenzi în luna curentă</label>
+          <input type="number" min={1} className="w-full" value={cond.nr_comenzi_min||1} onChange={e=>onChange({...cond,nr_comenzi_min:parseInt(e.target.value)||1})} style={{fontSize:12,padding:'6px 8px'}}/></div>
+      )}
+      {cond.tip === 'cumul_valoare_luna' && (
+        <div><label style={{fontSize:11}}>Valoare minimă cumulată luna curentă (RON)</label>
+          <input type="number" min={0} className="w-full" value={cond.valoare_min||0} onChange={e=>onChange({...cond,valoare_min:parseFloat(e.target.value)||0})} style={{fontSize:12,padding:'6px 8px'}}/></div>
       )}
     </div>
   )
 }
 
-const emptyRule = {
-  name: '', tip: 'LINE_DISCOUNT', activ: true, prioritate: 10, combinabil: true,
-  bazaCalcul: 'pret_baza',
-  conditii: [{ tip: 'produs_in_cos', productId: '', cantMin: 1, operator: 'AND' }],
-  actiune: { tip: 'discount_procent_linie', productIdTinta: '', valoare: 10, eticheta: '', cantitateGratuita: 1 },
-  restrictii: { dataStart: new Date().toISOString().split('T')[0], dataEnd: '', maxPerComanda: '', maxPerClient: '' }
-}
-
-const emptyPromo = {
-  name: '', productId: '', firmId: '', discountPercent: 10,
-  activa: true, dataStart: new Date().toISOString().split('T')[0], dataEnd: '',
-}
-
-function Toast({ msg, type = 'success', onDone }) {
-  return <div className={`toast ${type}`} onClick={onDone} style={{ cursor: 'pointer' }}>✓ {msg}</div>
+function Toast({msg,type,onDone}) {
+  return <div className={`toast ${type}`} onClick={onDone} style={{cursor:'pointer'}}>{msg}</div>
 }
 
 export default function AdminPromotii() {
-  const { db, addPromotion, updatePromotion, togglePromotion,
-          addPromotionRule, updatePromotionRule, togglePromotionRule } = useStore()
-
-  const [tab, setTab] = useState('rules') // 'rules' | 'simple'
-  const [editRule, setEditRule] = useState(null)
-  const [isNewRule, setIsNewRule] = useState(false)
-  const [editPromo, setEditPromo] = useState(null)
-  const [isNewPromo, setIsNewPromo] = useState(false)
+  const { db, addPromotionRule, updatePromotionRule, togglePromotionRule } = useStore()
+  const [selected, setSelected] = useState(null)
+  const [isNew, setIsNew] = useState(false)
   const [toast, setToast] = useState(null)
-  const [filterStatus, setFilterStatus] = useState('toate')
 
-  const today = new Date().toISOString().split('T')[0]
-  const products = db.products.filter(p => p.activ)
-  const categories = [...new Set(db.products.map(p => p.categorie).filter(Boolean))]
-  const marci = [...new Set(db.products.map(p => p.marca).filter(Boolean))]
+  const defaultRule = {
+    name:'', tip:'LINE_DISCOUNT', scope:'per_order', activ:true, prioritate:1,
+    combinabil:true, bazaCalcul:'pret_baza', valid_month:'', valid_year:'',
+    conditii:[{tip:'produs_in_cos',productId:'',cantMin:0}],
+    actiune:{tip:'discount_procent_linie',productIdTinta:'',valoare:0,eticheta:'',cantitateGratuita:1},
+    restrictii:{dataStart:'',dataEnd:''}
+  }
+  const [form, setForm] = useState(defaultRule)
 
-  function showToast(msg, type = 'success') {
-    setToast({ msg, type }); setTimeout(() => setToast(null), 2500)
+  const rules = db.promotionRules || []
+  const products = (db.products||[]).filter(p=>p.activ)
+
+  function showToast(msg,type='success'){setToast({msg,type});setTimeout(()=>setToast(null),2500)}
+
+  function openEdit(rule) {
+    setSelected(rule); setIsNew(false)
+    setForm({...defaultRule,...rule,conditii:rule.conditii?[...rule.conditii]:[{tip:'produs_in_cos',productId:'',cantMin:0}],actiune:{...defaultRule.actiune,...rule.actiune},restrictii:{...defaultRule.restrictii,...rule.restrictii}})
   }
 
-  // ── STATUS helpers ──
-  function getRuleStatus(r) {
-    if (!r.activ) return 'inactiva'
-    if (r.restrictii?.dataEnd && r.restrictii.dataEnd < today) return 'expirata'
-    if (r.restrictii?.dataStart > today) return 'viitoare'
-    return 'activa'
-  }
-  function getPromoStatus(p) {
-    if (!p.activa) return 'inactiva'
-    if (p.dataEnd && p.dataEnd < today) return 'expirata'
-    if (p.dataStart > today) return 'viitoare'
-    return 'activa'
-  }
-  const SB = { activa: 'badge-green', inactiva: 'badge-gray', expirata: 'badge-red', viitoare: 'badge-purple' }
-  const SL = { activa: 'Activă', inactiva: 'Inactivă', expirata: 'Expirată', viitoare: 'Viitoare' }
-
-  // ── Rule handlers ──
-  function openNewRule() { setEditRule(JSON.parse(JSON.stringify(emptyRule))); setIsNewRule(true) }
-  function openEditRule(r) { setEditRule(JSON.parse(JSON.stringify(r))); setIsNewRule(false) }
-
-  function setConditie(idx, val) {
-    setEditRule(f => { const c = [...f.conditii]; c[idx] = val; return { ...f, conditii: c } })
+  function openNew() {
+    setSelected(null); setIsNew(true); setForm({...defaultRule,id:undefined})
   }
 
-  function normDate(d) {
-    if (!d) return null
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-    if (/^\d{2}[/.]\d{2}[/.]\d{4}$/.test(d)) {
-      const parts = d.split(/[/.]/)
-      return parts[2] + '-' + parts[1] + '-' + parts[0]
-    }
-    return d
+  function handleSave() {
+    if (!form.name.trim()) return showToast('Completează numele regulii','error')
+    if (isNew) addPromotionRule(form)
+    else updatePromotionRule(selected.id, form)
+    showToast('Regulă salvată!')
+    setSelected(null); setIsNew(false)
   }
 
-  function handleSaveRule() {
-    if (!editRule.name.trim()) return
-    const toSave = {
-      ...editRule,
-      activ: editRule.activ !== false,
-      restrictii: {
-        ...editRule.restrictii,
-        dataStart: normDate(editRule.restrictii.dataStart) || new Date().toISOString().split('T')[0],
-        dataEnd: normDate(editRule.restrictii.dataEnd) || null,
-        maxPerComanda: editRule.restrictii.maxPerComanda === '' ? null : parseInt(editRule.restrictii.maxPerComanda) || null,
-        maxPerClient: editRule.restrictii.maxPerClient === '' ? null : parseInt(editRule.restrictii.maxPerClient) || null,
-      }
-    }
-    if (isNewRule) addPromotionRule(toSave)
-    else updatePromotionRule(editRule.id, toSave)
-    setEditRule(null)
-    showToast(isNewRule ? 'Regulă adăugată!' : 'Regulă salvată!')
+  function updateCond(idx, val) {
+    const next = [...form.conditii]; next[idx] = val; setForm(p=>({...p,conditii:next}))
   }
-
-  // ── Simple promo handlers ──
-  function openNewPromo() { setEditPromo({ ...emptyPromo }); setIsNewPromo(true) }
-  function openEditPromo(p) { setEditPromo({ ...p }); setIsNewPromo(false) }
-
-  function handleSavePromo(e) {
-    e.preventDefault()
-    if (isNewPromo) addPromotion(editPromo)
-    else updatePromotion(editPromo.id, editPromo)
-    setEditPromo(null)
-    showToast(isNewPromo ? 'Promoție adăugată!' : 'Promoție salvată!')
+  function removeCond(idx) {
+    setForm(p=>({...p,conditii:p.conditii.filter((_,i)=>i!==idx)}))
   }
-
-  // ── Filtered lists ──
-  const rules = (db.promotionRules || []).filter(r =>
-    filterStatus === 'toate' || getRuleStatus(r) === filterStatus
-  )
-  const promos = (db.promotions || []).filter(p =>
-    filterStatus === 'toate' || getPromoStatus(p) === filterStatus
-  )
-
-  const tipLabel = Object.fromEntries(TIPURI_REGULA.map(t => [t.value, t.label]))
+  function addCond() {
+    setForm(p=>({...p,conditii:[...p.conditii,{tip:'produs_in_cos',productId:'',cantMin:0}]}))
+  }
 
   return (
-    <Layout title="Promoții" subtitle="Motor de reguli + promoții simple"
-      actions={
-        tab === 'rules'
-          ? <button className="btn btn-primary btn-sm" onClick={openNewRule}>+ Regulă nouă</button>
-          : <button className="btn btn-primary btn-sm" onClick={openNewPromo}>+ Promoție simplă</button>
-      }>
+    <Layout title="Promoții & Reguli">
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-
-      {/* Tab switcher */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: 2, background: 'var(--bg2)', borderRadius: 8, padding: 3, marginRight: 12 }}>
-            <button className={`btn btn-sm ${tab==='rules'?'btn-primary':'btn-secondary'}`}
-              style={{ border: 'none' }} onClick={() => setTab('rules')}>
-              ⚡ Motor de reguli
-            </button>
-            <button className={`btn btn-sm ${tab==='simple'?'btn-primary':'btn-secondary'}`}
-              style={{ border: 'none' }} onClick={() => setTab('simple')}>
-              🏷 Promoții simple
-            </button>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 480px',gap:16,alignItems:'start'}}>
+        {/* Lista */}
+        <div className="card">
+          <div className="flex-between" style={{marginBottom:14}}>
+            <div className="section-title">Reguli active ({rules.filter(r=>r.activ).length}/{rules.length})</div>
+            <button className="btn btn-primary btn-sm" onClick={openNew}>+ Regulă nouă</button>
           </div>
-          {/* Status filters */}
-          {[['toate','Toate'], ['activa','Active'], ['viitoare','Viitoare'], ['expirata','Expirate'], ['inactiva','Inactive']].map(([v, l]) => (
-            <button key={v} className={`btn btn-sm ${filterStatus===v?'btn-primary':'btn-secondary'}`}
-              onClick={() => setFilterStatus(v)}>
-              {l}
-              {v !== 'toate' && (
-                <span style={{ marginLeft: 4, fontSize: 10, background: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: '0 5px' }}>
-                  {tab === 'rules'
-                    ? (db.promotionRules||[]).filter(r => getRuleStatus(r) === v).length
-                    : (db.promotions||[]).filter(p => getPromoStatus(p) === v).length}
-                </span>
-              )}
-            </button>
+          {rules.length === 0 && <div style={{color:'var(--text3)',fontSize:13,padding:'20px 0',textAlign:'center'}}>Nicio regulă definită.</div>}
+          {rules.map(rule => (
+            <div key={rule.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderBottom:'1px solid var(--border2)'}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:rule.activ?'var(--text)':'var(--text3)',marginBottom:2}}>{rule.name}</div>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                  <span style={{fontSize:10,padding:'1px 7px',borderRadius:10,background:'var(--bg3)',color:'var(--text2)',fontWeight:600}}>{rule.tip}</span>
+                  <span style={{fontSize:10,padding:'1px 7px',borderRadius:10,background:rule.scope==='monthly_cumul'?'var(--purple-bg)':'var(--blue-bg)',color:rule.scope==='monthly_cumul'?'var(--purple-text)':'var(--blue-text)',fontWeight:600}}>
+                    {rule.scope==='monthly_cumul'?'Cumul lunar':'Per comandă'}
+                  </span>
+                  {rule.combinabil && <span style={{fontSize:10,padding:'1px 7px',borderRadius:10,background:'var(--green-bg)',color:'var(--green-text)',fontWeight:600}}>Combinabil</span>}
+                  {rule.valid_month && <span style={{fontSize:10,padding:'1px 7px',borderRadius:10,background:'var(--orange-bg)',color:'var(--orange-text)',fontWeight:600}}>{LUNI[rule.valid_month]}{rule.valid_year?' '+rule.valid_year:''}</span>}
+                  <span style={{fontSize:10,color:'var(--text3)'}}>P{rule.prioritate}</span>
+                </div>
+              </div>
+              <div style={{display:'flex',gap:6}}>
+                <button className="btn btn-secondary btn-sm" onClick={()=>openEdit(rule)}>Editează</button>
+                <button className={`btn btn-sm ${rule.activ?'btn-danger':'btn-success'}`} onClick={()=>{togglePromotionRule(rule.id);showToast(rule.activ?'Dezactivată':'Activată',rule.activ?'error':'success')}}>
+                  {rule.activ?'Dezactivează':'Activează'}
+                </button>
+              </div>
+            </div>
           ))}
         </div>
-      </div>
 
-      {/* ── TAB: MOTOR REGULI ── */}
-      {tab === 'rules' && (
-        <div className="card">
-          {rules.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">⚡</div>
-              <div className="empty-state-title">Nicio regulă promoțională</div>
-              <div className="empty-state-sub">Creează prima regulă cu butonul "Regulă nouă" din dreapta sus.</div>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nume regulă</th>
-                    <th>Tip</th>
-                    <th>Acțiune</th>
-                    <th style={{ textAlign: 'center' }}>Prioritate</th>
-                    <th style={{ textAlign: 'center' }}>Combinabil</th>
-                    <th>Perioadă</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rules.map(r => {
-                    const status = getRuleStatus(r)
-                    return (
-                      <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => openEditRule(r)}>
-                        <td><b style={{ fontSize: 13 }}>{r.name}</b></td>
-                        <td style={{ fontSize: 11, color: 'var(--text2)' }}>{tipLabel[r.tip] || r.tip}</td>
-                        <td style={{ fontSize: 11 }}>
-                          {r.actiune?.tip?.includes('procent') ? 'Disc. %' : r.actiune?.tip?.includes('valoric') ? 'Disc. RON' : r.actiune?.tip === 'produs_gratuit' ? 'Gratuit' : '—'}
-                          {r.actiune?.valoare > 0 && <b style={{ color: 'var(--green-text)', marginLeft: 4 }}>−{r.actiune.valoare}{r.actiune.tip?.includes('procent') ? '%' : ' RON'}</b>}
-                          {r.actiune?.cantitateGratuita > 0 && r.actiune?.tip === 'produs_gratuit' && <b style={{ color: 'var(--green-text)', marginLeft: 4 }}>{r.actiune.cantitateGratuita} buc.</b>}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>{r.prioritate}</td>
-                        <td style={{ textAlign: 'center' }}>{r.combinabil ? <span style={{ color: 'var(--green-text)' }}>✓</span> : <span style={{ color: 'var(--red-text)' }}>✗</span>}</td>
-                        <td style={{ fontSize: 11, color: 'var(--text3)' }}>
-                          {r.restrictii?.dataStart} → {r.restrictii?.dataEnd || '∞'}
-                        </td>
-                        <td><span className={`badge ${SB[status]}`}>{SL[status]}</span></td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-secondary btn-sm" onClick={() => openEditRule(r)}>✏</button>
-                            <button className={`btn btn-sm ${r.activ ? 'btn-danger' : 'btn-success'}`}
-                              onClick={() => { togglePromotionRule(r.id); showToast(r.activ ? 'Dezactivată' : 'Activată') }}>
-                              {r.activ ? 'OFF' : 'ON'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── TAB: PROMOȚII SIMPLE ── */}
-      {tab === 'simple' && (
-        <div className="card">
-          {promos.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">🏷️</div>
-              <div className="empty-state-title">Nicio promoție simplă</div>
-              <div className="empty-state-sub">Adaugă o promoție rapidă per produs/client.</div>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Nume</th><th>Produs</th><th>Client specific</th><th>Discount</th><th>Perioadă</th><th>Status</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {promos.map(p => {
-                    const prod = db.products.find(pr => pr.id === p.productId)
-                    const firm = p.firmId ? db.firms.find(f => f.id === p.firmId) : null
-                    const status = getPromoStatus(p)
-                    return (
-                      <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => openEditPromo(p)}>
-                        <td><b>{p.name}</b></td>
-                        <td style={{ fontSize: 12 }}>{prod?.name || '—'}</td>
-                        <td>{firm ? <span className="badge badge-blue">{firm.name}</span> : <span style={{ color: 'var(--text3)', fontSize: 12 }}>Global</span>}</td>
-                        <td><b style={{ color: 'var(--green-text)', fontSize: 14 }}>−{p.discountPercent}%</b></td>
-                        <td style={{ fontSize: 12 }}>{fmtDate(p.dataStart)} → {fmtDate(p.dataEnd)}</td>
-                        <td><span className={`badge ${SB[status]}`}>{SL[status]}</span></td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-secondary btn-sm" onClick={() => openEditPromo(p)}>✏</button>
-                            <button className={`btn btn-sm ${p.activa ? 'btn-danger' : 'btn-success'}`}
-                              onClick={() => { togglePromotion(p.id); showToast(p.activa ? 'Dezactivată' : 'Activată') }}>
-                              {p.activa ? 'OFF' : 'ON'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── MODAL: Editare regulă complexă ── */}
-      {editRule && (
-        <div className="modal-overlay" onClick={() => setEditRule(null)}>
-          <div className="modal" style={{ width: 660, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr">
-              <h3>{isNewRule ? '⚡ Regulă nouă' : `Editează: ${editRule.name}`}</h3>
-              <button className="modal-close" onClick={() => setEditRule(null)}>×</button>
+        {/* Editor */}
+        {(selected || isNew) && (
+          <div className="card" style={{position:'sticky',top:16}}>
+            <div className="flex-between" style={{marginBottom:16}}>
+              <div className="section-title">{isNew?'Regulă nouă':'Editare: '+selected?.name}</div>
+              <button style={{background:'none',border:'none',cursor:'pointer',fontSize:18,color:'var(--text3)'}} onClick={()=>{setSelected(null);setIsNew(false)}}>×</button>
             </div>
 
-            {/* General */}
-            <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div className="section-title" style={{ fontSize: 11, marginBottom: 10 }}>📋 GENERAL</div>
-              <div className="form-group">
-                <label>Nume regulă *</label>
-                <input className="w-full" placeholder="ex: Mix & Match Patrice + Mr Big → Royal Mini -15%"
-                  value={editRule.name} onChange={e => setEditRule({ ...editRule, name: e.target.value })} />
+            <div className="form-group">
+              <label>Nume regulă *</label>
+              <input className="w-full" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Ex: Gold -8% Patrice XXL" />
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Tip regulă</label>
+                <select className="w-full" value={form.tip} onChange={e=>setForm(p=>({...p,tip:e.target.value}))}>
+                  {TIPURI_REGULA.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Tip regulă</label>
-                  <select className="w-full" value={editRule.tip} onChange={e => setEditRule({ ...editRule, tip: e.target.value })}>
-                    {TIPURI_REGULA.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Prioritate (1 = primul aplicat)</label>
-                  <input type="number" className="w-full" min={1} max={999} value={editRule.prioritate}
-                    onChange={e => setEditRule({ ...editRule, prioritate: parseInt(e.target.value) || 1 })} />
-                </div>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Scope</label>
+                <select className="w-full" value={form.scope} onChange={e=>setForm(p=>({...p,scope:e.target.value}))}>
+                  <option value="per_order">Per comandă</option>
+                  <option value="monthly_cumul">Cumul lunar</option>
+                </select>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Baza de calcul</label>
-                  <select className="w-full" value={editRule.bazaCalcul} onChange={e => setEditRule({ ...editRule, bazaCalcul: e.target.value })}>
-                    {BAZE_CALCUL.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-                  </select>
-                </div>
-                <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 16, gap: 16 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
-                    <input type="checkbox" checked={editRule.combinabil}
-                      onChange={e => setEditRule({ ...editRule, combinabil: e.target.checked })} />
-                    Combinabil cu alte reguli
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 0, fontSize: 13 }}>
-                    <input type="checkbox" checked={editRule.activ}
-                      onChange={e => setEditRule({ ...editRule, activ: e.target.checked })} />
-                    Activă
-                  </label>
-                </div>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Prioritate (1=cel mai mic)</label>
+                <input type="number" min={1} max={99} className="w-full" value={form.prioritate} onChange={e=>setForm(p=>({...p,prioritate:parseInt(e.target.value)||1}))} />
               </div>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Bază calcul</label>
+                <select className="w-full" value={form.bazaCalcul} onChange={e=>setForm(p=>({...p,bazaCalcul:e.target.value}))}>
+                  {BAZE_CALCUL.map(b=><option key={b.value} value={b.value}>{b.label}</option>)}
+                </select>
+              </div>
+              {form.scope==='per_order' && (
+                <>
+                  <div className="form-group" style={{marginBottom:0}}>
+                    <label>Lună valabilă (0=oricând)</label>
+                    <select className="w-full" value={form.valid_month||''} onChange={e=>setForm(p=>({...p,valid_month:e.target.value?parseInt(e.target.value):''}))}>
+                      <option value="">Oricând</option>
+                      {LUNI.slice(1).map((l,i)=><option key={i+1} value={i+1}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{marginBottom:0}}>
+                    <label>An (opțional)</label>
+                    <input type="number" className="w-full" value={form.valid_year||''} onChange={e=>setForm(p=>({...p,valid_year:e.target.value?parseInt(e.target.value):''}))} placeholder="2026" />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{display:'flex',gap:16,marginTop:10,marginBottom:4}}>
+              <label style={{display:'flex',gap:6,cursor:'pointer',fontSize:12}}>
+                <input type="checkbox" checked={form.activ} onChange={e=>setForm(p=>({...p,activ:e.target.checked}))}/>Activă
+              </label>
+              <label style={{display:'flex',gap:6,cursor:'pointer',fontSize:12}}>
+                <input type="checkbox" checked={form.combinabil} onChange={e=>setForm(p=>({...p,combinabil:e.target.checked}))}/>Combinabilă cu alte promoții
+              </label>
             </div>
 
             {/* Condiții */}
-            <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <div className="section-title" style={{ fontSize: 11 }}>🔍 CONDIȚII — când se aplică</div>
-                <button className="btn btn-secondary btn-sm"
-                  onClick={() => setEditRule(f => ({ ...f, conditii: [...f.conditii, { tip: 'produs_in_cos', productId: '', cantMin: 1, operator: 'AND' }] }))}>
-                  + Adaugă condiție
-                </button>
+            <div style={{marginTop:16}}>
+              <div className="flex-between" style={{marginBottom:8}}>
+                <label style={{fontSize:12,fontWeight:600,color:'var(--text2)',marginBottom:0}}>Condiții</label>
+                <button className="btn btn-ghost btn-sm" onClick={addCond}>+ Condiție</button>
               </div>
-              {editRule.conditii.map((cond, idx) => (
-                <ConditionRow key={idx} cond={cond} idx={idx}
-                  onChange={val => setConditie(idx, val)}
-                  onRemove={() => setEditRule(f => ({ ...f, conditii: f.conditii.filter((_, i) => i !== idx) }))}
-                  products={products} categories={categories} marci={marci} />
+              {form.conditii.map((cond,idx)=>(
+                <ConditionRow key={idx} cond={cond} idx={idx} onChange={v=>updateCond(idx,v)} onRemove={()=>removeCond(idx)} products={products}/>
               ))}
             </div>
 
             {/* Acțiune */}
-            <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div className="section-title" style={{ fontSize: 11, marginBottom: 10 }}>⚡ ACȚIUNE — ce se întâmplă</div>
-              <div className="form-group">
+            <div style={{marginTop:16,background:'var(--bg)',borderRadius:8,padding:12}}>
+              <label style={{fontSize:12,fontWeight:600,color:'var(--text2)',display:'block',marginBottom:10}}>Acțiune</label>
+              <div className="form-group" style={{marginBottom:10}}>
                 <label>Tip acțiune</label>
-                <select className="w-full" value={editRule.actiune.tip}
-                  onChange={e => setEditRule({ ...editRule, actiune: { ...editRule.actiune, tip: e.target.value } })}>
-                  {TIPURI_ACTIUNE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                <select className="w-full" value={form.actiune.tip} onChange={e=>setForm(p=>({...p,actiune:{...p.actiune,tip:e.target.value}}))}>
+                  {TIPURI_ACTIUNE.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
-              {['discount_procent_linie','discount_valoric_linie','produs_gratuit'].includes(editRule.actiune.tip) && (
-                <div className="form-group">
+              {(form.actiune.tip==='discount_procent_linie'||form.actiune.tip==='discount_valoric_linie'||form.actiune.tip==='produs_gratuit') && (
+                <div className="form-group" style={{marginBottom:10}}>
                   <label>Produs țintă</label>
-                  <select className="w-full" value={editRule.actiune.productIdTinta || ''}
-                    onChange={e => setEditRule({ ...editRule, actiune: { ...editRule.actiune, productIdTinta: e.target.value } })}>
+                  <select className="w-full" value={form.actiune.productIdTinta||''} onChange={e=>setForm(p=>({...p,actiune:{...p.actiune,productIdTinta:e.target.value}}))}>
                     <option value="">Selectează produs...</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
               )}
-              <div className="form-row">
-                {editRule.actiune.tip !== 'produs_gratuit' ? (
-                  <div className="form-group">
-                    <label>{editRule.actiune.tip?.includes('procent') ? 'Discount (%)' : 'Discount (RON)'}</label>
-                    <input type="number" className="w-full" min={0} max={100} step={0.1}
-                      value={editRule.actiune.valoare || ''}
-                      onChange={e => setEditRule({ ...editRule, actiune: { ...editRule.actiune, valoare: parseFloat(e.target.value) || 0 } })} />
-                  </div>
-                ) : (
-                  <div className="form-group">
-                    <label>Cantitate gratuită (role)</label>
-                    <input type="number" className="w-full" min={1}
-                      value={editRule.actiune.cantitateGratuita || 1}
-                      onChange={e => setEditRule({ ...editRule, actiune: { ...editRule.actiune, cantitateGratuita: parseInt(e.target.value) || 1 } })} />
-                  </div>
-                )}
-                <div className="form-group">
-                  <label>Etichetă afișată clientului</label>
-                  <input className="w-full" placeholder="ex: Mix & Match Mai 2025"
-                    value={editRule.actiune.eticheta || ''}
-                    onChange={e => setEditRule({ ...editRule, actiune: { ...editRule.actiune, eticheta: e.target.value } })} />
+              {form.actiune.tip!=='produs_gratuit' && (
+                <div className="form-group" style={{marginBottom:10}}>
+                  <label>{form.actiune.tip.includes('procent')?'Discount %':'Valoare RON'}</label>
+                  <input type="number" min={0} step={0.1} className="w-full" value={form.actiune.valoare||0} onChange={e=>setForm(p=>({...p,actiune:{...p.actiune,valoare:parseFloat(e.target.value)||0}}))} />
                 </div>
-              </div>
-              {/* Preview */}
-              {editRule.actiune.productIdTinta && (editRule.actiune.valoare > 0 || editRule.actiune.cantitateGratuita > 0) && (() => {
-                const prod = db.products.find(p => p.id === editRule.actiune.productIdTinta)
-                if (!prod) return null
-                return (
-                  <div style={{ background: 'var(--green-bg)', border: '1px solid var(--green)', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
-                    <b>Preview impact — {prod.name}:</b> preț bază {lei(prod.pretBaza)} →{' '}
-                    {editRule.actiune.tip === 'discount_procent_linie' && <b style={{ color: 'var(--green-text)' }}>{lei(prod.pretBaza * (1 - editRule.actiune.valoare/100))} (−{editRule.actiune.valoare}%)</b>}
-                    {editRule.actiune.tip === 'discount_valoric_linie' && <b style={{ color: 'var(--green-text)' }}>−{lei(editRule.actiune.valoare)} pe linie</b>}
-                    {editRule.actiune.tip === 'produs_gratuit' && <b style={{ color: 'var(--green-text)' }}>{editRule.actiune.cantitateGratuita} role gratuite (val. {lei(prod.pretBaza * editRule.actiune.cantitateGratuita)})</b>}
-                  </div>
-                )
-              })()}
-            </div>
-
-            {/* Restricții */}
-            <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div className="section-title" style={{ fontSize: 11, marginBottom: 10 }}>🔒 RESTRICȚII</div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Data start *</label>
-                  <input type="date" className="w-full" value={editRule.restrictii.dataStart || ''}
-                    onChange={e => setEditRule({ ...editRule, restrictii: { ...editRule.restrictii, dataStart: e.target.value } })} />
+              )}
+              {form.actiune.tip==='produs_gratuit' && (
+                <div className="form-group" style={{marginBottom:10}}>
+                  <label>Cantitate gratuită (role)</label>
+                  <input type="number" min={1} className="w-full" value={form.actiune.cantitateGratuita||1} onChange={e=>setForm(p=>({...p,actiune:{...p.actiune,cantitateGratuita:parseInt(e.target.value)||1}}))} />
                 </div>
-                <div className="form-group">
-                  <label>Data end (gol = fără expirare)</label>
-                  <input type="date" className="w-full" value={editRule.restrictii.dataEnd || ''}
-                    onChange={e => setEditRule({ ...editRule, restrictii: { ...editRule.restrictii, dataEnd: e.target.value } })} />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Max per comandă (gol = ∞)</label>
-                  <input type="number" className="w-full" min={1} placeholder="∞"
-                    value={editRule.restrictii.maxPerComanda || ''}
-                    onChange={e => setEditRule({ ...editRule, restrictii: { ...editRule.restrictii, maxPerComanda: e.target.value } })} />
-                </div>
-                <div className="form-group">
-                  <label>Max per client (gol = ∞)</label>
-                  <input type="number" className="w-full" min={1} placeholder="∞"
-                    value={editRule.restrictii.maxPerClient || ''}
-                    onChange={e => setEditRule({ ...editRule, restrictii: { ...editRule.restrictii, maxPerClient: e.target.value } })} />
-                </div>
+              )}
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Etichetă afișată clientului</label>
+                <input className="w-full" value={form.actiune.eticheta||''} onChange={e=>setForm(p=>({...p,actiune:{...p.actiune,eticheta:e.target.value}}))} placeholder="Ex: Gold -8% Patrice XXL" />
               </div>
             </div>
 
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setEditRule(null)}>Anulează</button>
-              <button className="btn btn-primary" disabled={!editRule.name.trim()} onClick={handleSaveRule}>
-                {isNewRule ? '+ Creează regula' : 'Salvează modificările'}
-              </button>
+            {/* Restricții date */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:12}}>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Data start (opțional)</label>
+                <input type="text" className="w-full" value={form.restrictii?.dataStart||''} onChange={e=>setForm(p=>({...p,restrictii:{...p.restrictii,dataStart:e.target.value}}))} placeholder="DD/MM/YYYY"/>
+              </div>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label>Data end (opțional)</label>
+                <input type="text" className="w-full" value={form.restrictii?.dataEnd||''} onChange={e=>setForm(p=>({...p,restrictii:{...p.restrictii,dataEnd:e.target.value}}))} placeholder="DD/MM/YYYY"/>
+              </div>
             </div>
+
+            <button className="btn btn-primary w-full" style={{marginTop:16,justifyContent:'center'}} onClick={handleSave}>
+              {isNew?'Creează regulă':'Salvează modificările'}
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* ── MODAL: Promoție simplă ── */}
-      {editPromo && (
-        <div className="modal-overlay" onClick={() => setEditPromo(null)}>
-          <div className="modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-hdr">
-              <h3>{isNewPromo ? '🏷 Promoție nouă' : `Editează: ${editPromo.name}`}</h3>
-              <button className="modal-close" onClick={() => setEditPromo(null)}>×</button>
-            </div>
-            <form onSubmit={handleSavePromo}>
-              <div className="form-group">
-                <label>Nume promoție *</label>
-                <input className="w-full" required placeholder="ex: Campanie Iunie — Patrice XXL"
-                  value={editPromo.name} onChange={e => setEditPromo({ ...editPromo, name: e.target.value })} />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Produs *</label>
-                  <select className="w-full" required value={editPromo.productId}
-                    onChange={e => setEditPromo({ ...editPromo, productId: e.target.value })}>
-                    <option value="">Selectează...</option>
-                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Client specific</label>
-                  <select className="w-full" value={editPromo.firmId || ''}
-                    onChange={e => setEditPromo({ ...editPromo, firmId: e.target.value || '' })}>
-                    <option value="">Global (toți clienții)</option>
-                    {db.firms.filter(f => f.status==='activ').map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Discount (%)</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <input type="range" min={1} max={80} style={{ flex: 1, accentColor: 'var(--blue)' }}
-                    value={editPromo.discountPercent}
-                    onChange={e => setEditPromo({ ...editPromo, discountPercent: parseInt(e.target.value) })} />
-                  <div style={{ background: 'var(--green-bg)', color: 'var(--green-text)', fontWeight: 700, fontSize: 16, padding: '4px 14px', borderRadius: 8, minWidth: 64, textAlign: 'center' }}>
-                    −{editPromo.discountPercent}%
-                  </div>
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Data start *</label>
-                  <input type="date" className="w-full" required value={editPromo.dataStart}
-                    onChange={e => setEditPromo({ ...editPromo, dataStart: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Data sfârșit *</label>
-                  <input type="date" className="w-full" required value={editPromo.dataEnd}
-                    min={editPromo.dataStart}
-                    onChange={e => setEditPromo({ ...editPromo, dataEnd: e.target.value })} />
-                </div>
-              </div>
-              {editPromo.productId && (() => {
-                const prod = db.products.find(p => p.id === editPromo.productId)
-                if (!prod) return null
-                return (
-                  <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '8px 12px', fontSize: 12, marginBottom: 8 }}>
-                    Preț bază: <b>{lei(prod.pretBaza)}</b> →{' '}
-                    <b style={{ color: 'var(--green-text)' }}>{lei(prod.pretBaza * (1 - editPromo.discountPercent/100))}</b>
-                    {' '}(economie {lei(prod.pretBaza * editPromo.discountPercent/100)}/rolă)
-                  </div>
-                )
-              })()}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 16 }}>
-                <input type="checkbox" checked={editPromo.activa}
-                  onChange={e => setEditPromo({ ...editPromo, activa: e.target.checked })} />
-                Promoție activă
-              </label>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setEditPromo(null)}>Anulează</button>
-                <button type="submit" className="btn btn-primary">{isNewPromo ? 'Adaugă' : 'Salvează'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </Layout>
   )
 }

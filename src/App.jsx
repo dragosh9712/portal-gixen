@@ -1,82 +1,74 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
+import ForgotPassword from './pages/ForgotPassword'
 import Dashboard from './pages/Dashboard'
 import ComandaNoua from './pages/ComandaNoua'
 import ComenzileMele from './pages/ComenzileMele'
 import Produse from './pages/Produse'
-import Profil from './pages/Profil'
 import Favorite from './pages/Favorite'
+import Profil from './pages/Profil'
 import ClientRapoarte from './pages/ClientRapoarte'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminComenzi from './pages/AdminComenzi'
+import AdminComandaNoua from './pages/AdminComandaNoua'
 import AdminClienti from './pages/AdminClienti'
 import AdminProduse from './pages/AdminProduse'
 import AdminPromotii from './pages/AdminPromotii'
-import AdminRapoarte from './pages/AdminRapoarte'
+import AdminRuleBuilder from './pages/AdminRuleBuilder'
 import AdminOferta from './pages/AdminOferta'
 import AdminOferte from './pages/AdminOferte'
-import AdminRuleBuilder from './pages/AdminRuleBuilder'
-
-const PAGE_TITLES = {
-  '/dashboard': 'Dashboard', '/comanda-noua': 'Comandă nouă', '/comenzile-mele': 'Comenzile mele',
-  '/produse': 'Produse & prețuri', '/favorite': 'Favorite', '/rapoarte': 'Rapoarte', '/profil': 'Profil firmă',
-  '/admin/dashboard': 'Dashboard Admin', '/admin/comenzi': 'Comenzi', '/admin/clienti': 'Clienți',
-  '/admin/produse': 'Produse', '/admin/promotii': 'Promoții', '/admin/rapoarte': 'Rapoarte',
-  '/admin/oferta': 'Generator ofertă', '/admin/oferte': 'Oferte emise', '/admin/promotii-rules': 'Motor promoții',
-}
-
-function TitleUpdater() {
-  const location = useLocation()
-  useEffect(() => {
-    const title = PAGE_TITLES[location.pathname] || 'portal.gixen.ro'
-    document.title = `${title} | portal.gixen.ro`
-  }, [location])
-  return null
-}
+import AdminRapoarte from './pages/AdminRapoarte'
+import AdminComisioane from './pages/AdminComisioane'
+import AdminLocatii from './pages/AdminLocatii'
+import AdminUoM from './pages/AdminUoM'
+import AdminRetetar from './pages/AdminRetetar'
+import AdminSurvey from './pages/AdminSurvey'
 
 function RequireAuth({ children, role }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
+  if (role && user.role !== role) return <Navigate to="/dashboard" replace />
   return children
 }
-
-function RootRedirect() {
-  const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
-  return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
-}
-
-const A = ({ role, children }) => <RequireAuth role={role}>{children}</RequireAuth>
 
 export default function App() {
   return (
     <BrowserRouter>
-      <TitleUpdater />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/" element={<RootRedirect />} />
-        <Route path="/dashboard"        element={<A role="client"><Dashboard /></A>} />
-        <Route path="/comanda-noua"     element={<A role="client"><ComandaNoua /></A>} />
-        <Route path="/comenzile-mele"   element={<A role="client"><ComenzileMele /></A>} />
-        <Route path="/produse"          element={<A role="client"><Produse /></A>} />
-        <Route path="/favorite"         element={<A role="client"><Favorite /></A>} />
-        <Route path="/rapoarte"         element={<A role="client"><ClientRapoarte /></A>} />
-        <Route path="/profil"           element={<A role="client"><Profil /></A>} />
-        <Route path="/admin/dashboard"  element={<A role="admin"><AdminDashboard /></A>} />
-        <Route path="/admin/comenzi"    element={<A role="admin"><AdminComenzi /></A>} />
-        <Route path="/admin/clienti"    element={<A role="admin"><AdminClienti /></A>} />
-        <Route path="/admin/produse"    element={<A role="admin"><AdminProduse /></A>} />
-        <Route path="/admin/promotii"   element={<A role="admin"><AdminPromotii /></A>} />
-        <Route path="/admin/rapoarte"   element={<A role="admin"><AdminRapoarte /></A>} />
-        <Route path="/admin/oferta"     element={<A role="admin"><AdminOferta /></A>} />
-        <Route path="/admin/oferte"     element={<A role="admin"><AdminOferte /></A>} />
-        <Route path="/admin/promotii-rules" element={<A role="admin"><AdminRuleBuilder /></A>} />
-        <Route path="*" element={<RootRedirect />} />
+        <Route path="/reset-parola" element={<ForgotPassword />} />
+
+        {/* Client routes */}
+        <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+        <Route path="/comanda-noua" element={<RequireAuth><ComandaNoua /></RequireAuth>} />
+        <Route path="/comenzile-mele" element={<RequireAuth><ComenzileMele /></RequireAuth>} />
+        <Route path="/produse" element={<RequireAuth><Produse /></RequireAuth>} />
+        <Route path="/favorite" element={<RequireAuth><Favorite /></RequireAuth>} />
+        <Route path="/profil" element={<RequireAuth><Profil /></RequireAuth>} />
+        <Route path="/rapoarte" element={<RequireAuth><ClientRapoarte /></RequireAuth>} />
+
+        {/* Admin routes */}
+        <Route path="/admin/dashboard" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
+        <Route path="/admin/comenzi" element={<RequireAuth role="admin"><AdminComenzi /></RequireAuth>} />
+        <Route path="/admin/comanda-noua" element={<RequireAuth role="admin"><AdminComandaNoua /></RequireAuth>} />
+        <Route path="/admin/clienti" element={<RequireAuth role="admin"><AdminClienti /></RequireAuth>} />
+        <Route path="/admin/produse" element={<RequireAuth role="admin"><AdminProduse /></RequireAuth>} />
+        <Route path="/admin/promotii" element={<RequireAuth role="admin"><AdminPromotii /></RequireAuth>} />
+        <Route path="/admin/promotii/rules" element={<RequireAuth role="admin"><AdminRuleBuilder /></RequireAuth>} />
+        <Route path="/admin/oferta" element={<RequireAuth role="admin"><AdminOferta /></RequireAuth>} />
+        <Route path="/admin/oferte" element={<RequireAuth role="admin"><AdminOferte /></RequireAuth>} />
+        <Route path="/admin/rapoarte" element={<RequireAuth role="admin"><AdminRapoarte /></RequireAuth>} />
+        <Route path="/admin/comisioane" element={<RequireAuth role="admin"><AdminComisioane /></RequireAuth>} />
+        <Route path="/admin/locatii" element={<RequireAuth role="admin"><AdminLocatii /></RequireAuth>} />
+        <Route path="/admin/uom" element={<RequireAuth role="admin"><AdminUoM /></RequireAuth>} />
+        <Route path="/admin/retetar" element={<RequireAuth role="admin"><AdminRetetar /></RequireAuth>} />
+        <Route path="/admin/survey" element={<RequireAuth role="admin"><AdminSurvey /></RequireAuth>} />
+
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   )

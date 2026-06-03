@@ -28,7 +28,8 @@ function Toast({ msg, onDone }) {
 }
 
 export default function AdminComenzi() {
-  const { db, updateOrderStatus, setFactura, addNotaInterna, bulkUpdateOrderStatus, updateTransport, updateDocumente } = useStore()
+  const { db, updateOrderStatus, setFactura, addNotaInterna, bulkUpdateOrderStatus, updateTransport, updateDocumente, updateAdresaLivrare } = useStore()
+  const locations = db.locations || []
   const [filterStatus, setFilterStatus] = useState('toate')
   const [filterFirm, setFilterFirm] = useState('toate')
   const [search, setSearch] = useState('')
@@ -38,6 +39,7 @@ export default function AdminComenzi() {
   const [selectedIds, setSelectedIds] = useState([])
   const [toast, setToast] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
+  const [locationInput, setLocationInput] = useState('')
 
   const firms = db.firms.filter(f => f.status === 'activ')
   const orders = db.orders.filter(o => {
@@ -212,27 +214,44 @@ export default function AdminComenzi() {
             {/* Linii */}
             <div className="section-title" style={{ marginBottom: 8 }}>Linii comandă</div>
             <table>
-              <thead><tr><th>Produs</th><th>Cant.</th><th>Preț/buc</th><th>Disc.</th><th className="text-right">Total</th></tr></thead>
+              <thead><tr><th>Produs</th><th>UoM</th><th>Cant.</th><th>Preț/buc fără TVA</th><th>TVA 21%</th><th className="text-right">Total fără TVA</th><th className="text-right">Total cu TVA</th></tr></thead>
               <tbody>
                 {selected.lines.map((l, i) => {
                   const p = db.products.find(p => p.id === l.productId)
+                  const lineTva = Math.round((l.total || 0) * 0.21 * 100) / 100
                   return (
                     <tr key={i}>
                       <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {p?.imagine && <img src={p.imagine} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} onError={e => e.target.style.display='none'} />}
-                        {p?.name}
+                        {(p?.imagine || p?.image_url) && <img src={p.imagine || p.image_url} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} onError={e => e.target.style.display='none'} />}
+                        <div><div style={{fontWeight:500}}>{p?.name?.slice(0,50)}</div><div style={{fontSize:10,color:'var(--text3)'}}>{p?.cod}</div></div>
                       </td>
-                      <td>{l.cantitate}</td><td>{lei(l.pretUnitar)}</td>
-                      <td>{l.discount > 0 ? `-${l.discount}%` : '—'}</td>
-                      <td className="text-right"><b>{lei(l.total)}</b></td>
+                      <td style={{fontSize:11,color:'var(--text3)'}}>{l.unitateSel || l.uom_code || '—'}</td>
+                      <td>{l.cantitate}</td>
+                      <td>{lei(l.pretUnitar)}</td>
+                      <td style={{color:'var(--text3)',fontSize:12}}>{lei(Math.round((l.pretUnitar||0) * 0.21 * 100) / 100)}</td>
+                      <td className="text-right">{lei(l.total)}</td>
+                      <td className="text-right"><b>{lei(Math.round((l.total + lineTva) * 100) / 100)}</b></td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-            <div className="summary-box" style={{ marginTop: 12 }}>
-              <div className="summary-line total"><span>Total</span><span>{lei(selected.total)}</span></div>
-            </div>
+            {(() => {
+              const netTotal = (selected.lines || []).reduce((s, l) => s + (l.total || 0), 0)
+              const discTotal = (selected.discountLinii || []).reduce((s, d) => s + (d.valoare || 0), 0)
+              const netAfterDisc = netTotal + discTotal
+              const tvaAmount = Math.round(netAfterDisc * 0.21 * 100) / 100
+              const grossTotal = Math.round((netAfterDisc + tvaAmount) * 100) / 100
+              return (
+                <div className="summary-box" style={{ marginTop: 12 }}>
+                  <div className="summary-line"><span>Subtotal fără TVA</span><span>{lei(Math.round(netTotal*100)/100)}</span></div>
+                  {discTotal !== 0 && <div className="summary-line" style={{color:'var(--green-text)'}}><span>Discounturi</span><span>{lei(Math.round(discTotal*100)/100)}</span></div>}
+                  <div className="summary-line"><span>Net fără TVA</span><span><b>{lei(Math.round(netAfterDisc*100)/100)}</b></span></div>
+                  <div className="summary-line"><span>TVA 21%</span><span>{lei(tvaAmount)}</span></div>
+                  <div className="summary-line total"><span>Total cu TVA</span><span>{lei(grossTotal)}</span></div>
+                </div>
+              )
+            })()}
 
             {/* Transport & Documente */}
             <div className="divider" />

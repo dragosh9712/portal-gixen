@@ -1,46 +1,68 @@
 /**
- * Motor de promoții Gixen v2 — complet, fără bug-uri
+ * Motor de promoții Gixen v4
+ * Fix: uomCodes dinamic din product_uom, nu hardcodat
  */
 
-// ── Utils ──
 const TODAY = () => new Date().toISOString().split('T')[0]
 
 function normalizeDate(d) {
   if (!d) return null
-  // YYYY-MM-DD → ok
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-  // DD/MM/YYYY sau DD.MM.YYYY
-  const m = d.match(/^(\d{2})[/.](\d{2})[/.](\d{4})$/)
+  const m = d.match(/^(\d{2})[\/\.](\d{2})[\/\.](\d{4})$/)
   if (m) return `${m[3]}-${m[2]}-${m[1]}`
   return d
 }
 
-// ── UoM conversii ──
+// ── UoM conversie ──
 export function toRole(cantitate, unitateSel, produs) {
-  if (!cantitate || !produs?.conversii) return cantitate || 0
-  const { rolePerBax = 1, rolePerPalet = 1 } = produs.conversii
-  if (!unitateSel || unitateSel === 'rolă' || unitateSel === 'rola') return cantitate
-  if (unitateSel === 'bax') return cantitate * rolePerBax
-  if (unitateSel === 'palet') return cantitate * rolePerPalet
-  return cantitate
+  if (!cantitate || !produs) return cantitate || 0
+  const uom = (produs.product_uom || []).find(u =>
+    u.uom_code?.toLowerCase() === unitateSel?.toLowerCase() ||
+    u.uom_name?.toLowerCase() === unitateSel?.toLowerCase()
+  )
+  return uom ? cantitate * uom.coeficient : cantitate
 }
 
 export function pretPerUnitate(pretPerRola, unitateSel, produs) {
-  if (!produs?.conversii) return pretPerRola
-  const { rolePerBax = 1, rolePerPalet = 1 } = produs.conversii
-  if (!unitateSel || unitateSel === 'rolă' || unitateSel === 'rola') return pretPerRola
-  if (unitateSel === 'bax') return pretPerRola * rolePerBax
-  if (unitateSel === 'palet') return pretPerRola * rolePerPalet
-  return pretPerRola
+  if (!produs) return pretPerRola
+  const uom = (produs.product_uom || []).find(u =>
+    u.uom_code?.toLowerCase() === unitateSel?.toLowerCase() ||
+    u.uom_name?.toLowerCase() === unitateSel?.toLowerCase()
+  )
+  return uom ? pretPerRola * uom.coeficient : pretPerRola
 }
 
-// ── Tier pricing ──
-export function getTierPret(product, cantRole) {
-  if (!product?.tierPricing?.length) return product?.pretBaza || 0
-  const tier = [...product.tierPricing]
-    .sort((a, b) => b.cantMin - a.cantMin)
-    .find(t => cantRole >= t.cantMin)
-  return tier ? tier.pret : product.pretBaza || 0
+// ── Commission rate cu prioritate ──
+function getCommissionRate(agentId, productId, customerId, db) {
+  if (!agentId || !db.commission_rules) return 0
+  const rules = (db.commission_rules || []).filter(r => r.is_active && r.agent_id === agentId)
+  const sorted = [...rules].sort((a, b) => b.priority - a.priority)
+  let match = sorted.find(r => r.product_id === productId && r.customer_id === customerId)
+  if (match) return match.rate
+  match = sorted.find(r => r.product_id == null && r.customer_id === customerId)
+  if (match) return match.rate
+  match = sorted.find(r => r.product_id === productId && r.customer_id == null)
+  if (match) return match.rate
+  match = sorted.find(r => r.product_id == null && r.customer_id == null)
+  return match ? match.rate : 0
+}
+
+// ── Preț de bază ──
+function getBasePret(produs) {
+  const ap = (produs.product_prices || []).find(p => p.is_active)
+  return ap?.base_price || produs.pretBaza || 0
+}
+
+// ── Preț pentru client (cu comision + client pricing) ──
+export function getPretPentruClient(produs, firma, db) {
+  let pret = getBasePret(produs)
+  if (firma?.agent_id) {
+    const commRate = getCommissionRate(firma.agent_id, produs.id, firma.id, db)
+    pret = pret * (1 + commRate / 100)
+  }
+  const cp = (db.clientPricing || []).find(c => c.firmId === firma?.id && c.productId === produs.id)
+  if (cp?.discountExtra > 0) pret = pret * (1 - cp.discountExtra / 100)
+  return Math.round(pret * 100) / 100
 }
 
 // ── Verificare regulă activă ──
@@ -54,280 +76,282 @@ function esteActiva(rule) {
   return true
 }
 
-// ── Evaluare O singură condiție ──
-function evalConditie(cond, liniiCos, totalBrut, firma) {
+// ── Evaluare condiție ──
+function evalConditie(cond, liniiCos, totalBrut, firma, db) {
   switch (cond.tip) {
     case 'produs_in_cos': {
-      if (!cond.productId) return false
       const linie = liniiCos.find(l => l.productId === cond.productId)
-      if (!linie) return false
-      return linie.cantRole >= (cond.cantMin || 0)
+      return linie ? linie.cantRole >= (cond.cantMin || 0) : false
     }
-    case 'cantitate_totala_categorie': {
-      if (!cond.categorie) return false
-      const total = liniiCos
-        .filter(l => l.produs?.categorie === cond.categorie)
-        .reduce((s, l) => s + l.cantRole, 0)
-      return total >= (cond.cantMin || 0)
-    }
-    case 'valoare_cos':
-      return totalBrut >= (cond.valoareMin || 0)
-    case 'grup_client':
-      if (!firma || !cond.grup) return false
-      return firma.grupClient === cond.grup
-    case 'marca_in_cos': {
-      if (!cond.marca) return false
+    case 'valoare_cos': return totalBrut >= (cond.valoareMin || 0)
+    case 'grup_client': return firma?.grupClient === cond.grup
+    case 'marca_in_cos':
       return liniiCos.some(l => l.produs?.marca === cond.marca && l.cantRole >= (cond.cantMin || 0))
+    case 'cumul_comenzi_luna': {
+      if (!firma?.id) return false
+      const now = new Date()
+      const stat = (db.monthly_order_stats || []).find(s =>
+        s.firm_id === firma.id && s.month === now.getMonth() + 1 && s.year === now.getFullYear()
+      )
+      return stat ? stat.order_count >= (cond.nr_comenzi_min || 1) : false
     }
-    default:
-      return false
+    case 'cumul_valoare_luna': {
+      if (!firma?.id) return false
+      const now = new Date()
+      const stat = (db.monthly_order_stats || []).find(s =>
+        s.firm_id === firma.id && s.month === now.getMonth() + 1 && s.year === now.getFullYear()
+      )
+      if (!stat) return false
+      const val = firma.currency === 'EUR' ? stat.total_value_eur : stat.total_value_ron
+      return val >= (cond.valoare_min || 0)
+    }
+    default: return false
   }
 }
 
-// ── Evaluare set de condiții cu AND/OR ──
-function evalToateConditiile(conditii, liniiCos, totalBrut, firma) {
-  if (!conditii?.length) return false // fără condiții = nu se aplică
-  
-  // Prima condiție fără operator
-  let result = evalConditie(conditii[0], liniiCos, totalBrut, firma)
-  
+function evalToateConditiile(conditii, liniiCos, totalBrut, firma, db) {
+  if (!conditii?.length) return false
+  let result = evalConditie(conditii[0], liniiCos, totalBrut, firma, db)
   for (let i = 1; i < conditii.length; i++) {
-    const cond = conditii[i]
-    const val = evalConditie(cond, liniiCos, totalBrut, firma)
-    if ((cond.operator || 'AND') === 'OR') {
-      result = result || val
-    } else {
-      result = result && val
-    }
+    const val = evalConditie(conditii[i], liniiCos, totalBrut, firma, db)
+    result = (conditii[i].operator || 'AND') === 'OR' ? result || val : result && val
   }
   return result
 }
 
-/**
- * MOTORUL PRINCIPAL
- *
- * @param {Array} liniiCos - [{ productId, cantitate, cantRole, unitateSel, produs, totalBrutLinie }]
- * @param {Object|null} firma - { id, grupClient, discountGlobal } sau null pentru oferte fără client
- * @param {Object} db - { promotionRules, clientPricing, products }
- * @param {Object} options - { skipClientPricing, skipGlobalDiscount, skipPromoRules }
- */
+// ═══════════════════════════════════════════════════════
+// MOTOR PRINCIPAL — calcul coș
+// ═══════════════════════════════════════════════════════
 export function calculeazaCos(liniiCos, firma, db, options = {}) {
   const { skipClientPricing = false, skipGlobalDiscount = false, skipPromoRules = false } = options
+  if (!liniiCos?.length) return { liniiCalculate: [], discountLinii: [], totalBrut: 0, totalDiscount: 0, totalNet: 0 }
 
-  if (!liniiCos?.length) {
-    return { liniiCalculate: [], discountLinii: [], totalBrut: 0, totalDiscount: 0, totalNet: 0 }
-  }
-
-  // Step 1: Calculează tier pricing per linie
   const liniiCalculate = liniiCos.map((linie, idx) => {
     const { produs, cantRole } = linie
-    const tierPret = getTierPret(produs, cantRole)
-    const pretAfisatPerUm = pretPerUnitate(tierPret, linie.unitateSel, produs)
-    const totalBrutLinie = tierPret * cantRole
-    return { ...linie, idx, tierPret, pretAfisatPerUm, totalBrutLinie }
+    const pretClient = getPretPentruClient(produs, firma, db)
+    const pretAfisatPerUm = pretPerUnitate(pretClient, linie.unitateSel, produs)
+    return { ...linie, idx, pretClient, pretAfisatPerUm, totalBrutLinie: pretClient * cantRole }
   })
 
   const totalBrut = liniiCalculate.reduce((s, l) => s + l.totalBrutLinie, 0)
   const discountLinii = []
 
-  // Step 2: Client pricing (discount negociat per produs)
-  if (!skipClientPricing && firma?.id) {
-    liniiCalculate.forEach(linie => {
-      const cp = (db.clientPricing || []).find(
-        c => c.firmId === firma.id && c.productId === linie.productId
-      )
-      if (cp?.discountExtra > 0) {
-        const valDisc = -(linie.totalBrutLinie * cp.discountExtra / 100)
-        discountLinii.push({
-          refLinieIdx: linie.idx,
-          productId: linie.productId,
-          eticheta: `Discount negociat −${cp.discountExtra}%`,
-          procent: cp.discountExtra,
-          valoare: Math.round(valDisc * 100) / 100,
-          tip: 'CLIENT_PRICING',
-          ruleId: null,
-        })
-      }
-    })
-  }
-
-  // Step 3: Reguli promoționale
   if (!skipPromoRules) {
     const rules = (db.promotionRules || [])
       .filter(r => esteActiva(r))
       .sort((a, b) => (a.prioritate || 99) - (b.prioritate || 99))
 
-    const appliedRuleIds = new Set()
+    const appliedIds = new Set()
 
     for (const rule of rules) {
-      // Verifică combinabilitate
-      if (!rule.combinabil && appliedRuleIds.size > 0) continue
-
-      // Calculează totalul curent pentru condiții de valoare
+      if (!rule.combinabil && appliedIds.size > 0) continue
       const totalCurent = totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
+      if (!evalToateConditiile(rule.conditii, liniiCalculate, totalCurent, firma, db)) continue
+      const a = rule.actiune
+      if (!a) continue
 
-      // Verifică toate condițiile
-      if (!evalToateConditiile(rule.conditii, liniiCalculate, totalCurent, firma)) continue
-
-      const actiune = rule.actiune
-      if (!actiune) continue
-
-      // Determină baza de calcul
-      function getBaza(linieIdx) {
-        const linie = liniiCalculate[linieIdx]
-        if (!linie) return 0
-        if (rule.bazaCalcul === 'pret_baza') return linie.totalBrutLinie
-        if (rule.bazaCalcul === 'pret_dupa_discount_anterior') {
-          const discPrev = discountLinii
-            .filter(d => d.refLinieIdx === linieIdx)
-            .reduce((s, d) => s + d.valoare, 0)
-          return linie.totalBrutLinie + discPrev
-        }
-        if (rule.bazaCalcul === 'total_net') {
-          return totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
-        }
-        return linie.totalBrutLinie
-      }
-
-      switch (actiune.tip) {
+      switch (a.tip) {
         case 'discount_procent_linie': {
-          const tintaIdx = liniiCalculate.findIndex(l => l.productId === actiune.productIdTinta)
-          if (tintaIdx < 0) continue
-          const baza = getBaza(tintaIdx)
-          discountLinii.push({
-            refLinieIdx: tintaIdx,
-            productId: actiune.productIdTinta,
-            eticheta: actiune.eticheta || rule.name,
-            procent: actiune.valoare,
-            valoare: Math.round(-baza * actiune.valoare / 100 * 100) / 100,
-            tip: rule.tip, ruleId: rule.id,
-          })
-          appliedRuleIds.add(rule.id)
-          break
-        }
-        case 'discount_valoric_linie': {
-          const tintaIdx = liniiCalculate.findIndex(l => l.productId === actiune.productIdTinta)
-          if (tintaIdx < 0) continue
-          discountLinii.push({
-            refLinieIdx: tintaIdx,
-            productId: actiune.productIdTinta,
-            eticheta: actiune.eticheta || rule.name,
-            procent: null,
-            valoare: -Math.abs(actiune.valoare),
-            tip: rule.tip, ruleId: rule.id,
-          })
-          appliedRuleIds.add(rule.id)
-          break
+          const idx = liniiCalculate.findIndex(l => l.productId === a.productIdTinta)
+          if (idx < 0) break
+          discountLinii.push({ refLinieIdx: idx, productId: a.productIdTinta, eticheta: a.eticheta || rule.name, procent: a.valoare, valoare: Math.round(-liniiCalculate[idx].totalBrutLinie * a.valoare / 100 * 100) / 100, tip: rule.tip, ruleId: rule.id })
+          appliedIds.add(rule.id); break
         }
         case 'discount_procent_total': {
           const baza = totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
-          discountLinii.push({
-            refLinieIdx: -1, productId: null,
-            eticheta: actiune.eticheta || rule.name,
-            procent: actiune.valoare,
-            valoare: Math.round(-baza * actiune.valoare / 100 * 100) / 100,
-            tip: rule.tip, ruleId: rule.id,
-          })
-          appliedRuleIds.add(rule.id)
-          break
+          discountLinii.push({ refLinieIdx: -1, productId: null, eticheta: a.eticheta || rule.name, procent: a.valoare, valoare: Math.round(-baza * a.valoare / 100 * 100) / 100, tip: rule.tip, ruleId: rule.id })
+          appliedIds.add(rule.id); break
         }
-        case 'discount_valoric_total': {
-          discountLinii.push({
-            refLinieIdx: -1, productId: null,
-            eticheta: actiune.eticheta || rule.name,
-            procent: null,
-            valoare: -Math.abs(actiune.valoare),
-            tip: rule.tip, ruleId: rule.id,
-          })
-          appliedRuleIds.add(rule.id)
-          break
+        case 'discount_valoric_linie': {
+          const idx = liniiCalculate.findIndex(l => l.productId === a.productIdTinta)
+          if (idx < 0) break
+          discountLinii.push({ refLinieIdx: idx, productId: a.productIdTinta, eticheta: a.eticheta || rule.name, procent: null, valoare: -Math.abs(a.valoare), tip: rule.tip, ruleId: rule.id })
+          appliedIds.add(rule.id); break
         }
+        case 'discount_valoric_total':
+          discountLinii.push({ refLinieIdx: -1, productId: null, eticheta: a.eticheta || rule.name, procent: null, valoare: -Math.abs(a.valoare), tip: rule.tip, ruleId: rule.id })
+          appliedIds.add(rule.id); break
         case 'produs_gratuit': {
-          const tintaIdx = liniiCalculate.findIndex(l => l.productId === actiune.productIdTinta)
-          if (tintaIdx < 0) continue
-          const linie = liniiCalculate[tintaIdx]
-          const cantGrat = actiune.cantitateGratuita || 1
-          discountLinii.push({
-            refLinieIdx: tintaIdx,
-            productId: actiune.productIdTinta,
-            eticheta: `${actiune.eticheta || rule.name} (${cantGrat} role gratuite)`,
-            procent: null,
-            valoare: Math.round(-linie.tierPret * cantGrat * 100) / 100,
-            tip: rule.tip, ruleId: rule.id,
-          })
-          appliedRuleIds.add(rule.id)
-          break
+          const idx = liniiCalculate.findIndex(l => l.productId === a.productIdTinta)
+          if (idx < 0) break
+          const cant = a.cantitateGratuita || 1
+          discountLinii.push({ refLinieIdx: idx, productId: a.productIdTinta, eticheta: `${a.eticheta || rule.name} (${cant} role gratuite)`, procent: null, valoare: Math.round(-liniiCalculate[idx].pretClient * cant * 100) / 100, tip: rule.tip, ruleId: rule.id })
+          appliedIds.add(rule.id); break
         }
-        default: break
+      }
+    }
+
+    // Cumul lunar
+    for (const rule of rules.filter(r => r.scope === 'monthly_cumul')) {
+      if (!evalToateConditiile(rule.conditii, liniiCalculate, totalBrut, firma, db)) continue
+      if (rule.actiune?.tip === 'discount_procent_total') {
+        const baza = totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
+        discountLinii.push({ refLinieIdx: -1, productId: null, eticheta: rule.actiune.eticheta || rule.name, procent: rule.actiune.valoare, valoare: Math.round(-baza * rule.actiune.valoare / 100 * 100) / 100, tip: 'CUMUL_LUNAR', ruleId: rule.id })
       }
     }
   }
 
-  // Step 4: Discount global firmă
   if (!skipGlobalDiscount && firma?.discountGlobal > 0) {
-    const netDupaReguli = totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
-    discountLinii.push({
-      refLinieIdx: -1, productId: null,
-      eticheta: `Discount global firmă −${firma.discountGlobal}%`,
-      procent: firma.discountGlobal,
-      valoare: Math.round(-netDupaReguli * firma.discountGlobal / 100 * 100) / 100,
-      tip: 'GLOBAL_FIRM', ruleId: null,
-    })
+    const net = totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
+    discountLinii.push({ refLinieIdx: -1, productId: null, eticheta: `Discount global −${firma.discountGlobal}%`, procent: firma.discountGlobal, valoare: Math.round(-net * firma.discountGlobal / 100 * 100) / 100, tip: 'GLOBAL_FIRM', ruleId: null })
   }
 
   const totalDiscount = discountLinii.reduce((s, d) => s + d.valoare, 0)
-  const totalNet = Math.round((totalBrut + totalDiscount) * 100) / 100
-
   return {
-    liniiCalculate,
-    discountLinii,
+    liniiCalculate, discountLinii,
     totalBrut: Math.round(totalBrut * 100) / 100,
     totalDiscount: Math.round(totalDiscount * 100) / 100,
-    totalNet,
+    totalNet: Math.round((totalBrut + totalDiscount) * 100) / 100
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MOTOR OFERTĂ — Fix principal: uomCodes dinamic
+// ═══════════════════════════════════════════════════════
+export function calculeazaOferta(productIds, firma, db) {
+  const produse = productIds.map(id => (db.products || []).find(p => p.id === id)).filter(Boolean)
+  if (!produse.length) return { produse: [], pricesPerUom: {}, eligibleRules: [], scenarios: [], uomCodes: [] }
+
+  // ── FIX: Colectăm uomCodes DIN produsele reale, NU hardcodat ──
+  const seenUom = new Set()
+  const uomOrder = [] // ordinea de afișare
+  for (const produs of produse) {
+    ;(produs.product_uom || [])
+      .filter(u => u.is_offer_display !== false)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      .forEach(u => {
+        if (!seenUom.has(u.uom_code)) {
+          seenUom.add(u.uom_code)
+          uomOrder.push(u.uom_code)
+        }
+      })
+  }
+  const uomCodes = uomOrder.length ? uomOrder : ['ROLA', 'BAX', 'PALET_DUBA', 'PALET_CAMION']
+
+  // ── Prețuri per produs per UoM ──
+  const pricesPerUom = {}
+  produse.forEach(produs => {
+    const pretRola = getPretPentruClient(produs, firma, db)
+    pricesPerUom[produs.id] = { name: produs.name, cod: produs.cod }
+    ;(produs.product_uom || [])
+      .filter(u => u.is_offer_display !== false)
+      .forEach(uom => {
+        pricesPerUom[produs.id][uom.uom_code] = Math.round(pretRola * uom.coeficient * 100) / 100
+      })
+  })
+
+  // ── Promoții eligibile (simulare coș cu cantitate maximă) ──
+  const liniiSimulate = produse.map(produs => {
+    const pretRola = getPretPentruClient(produs, firma, db)
+    return {
+      productId: produs.id, cantitate: 9999, cantRole: 9999,
+      unitateSel: 'ROLA', produs,
+      totalBrutLinie: pretRola * 9999
+    }
+  })
+  const totalSimulat = liniiSimulate.reduce((s, l) => s + l.totalBrutLinie, 0)
+
+  const eligibleRules = (db.promotionRules || []).filter(rule =>
+    esteActiva(rule) && evalToateConditiile(rule.conditii, liniiSimulate, totalSimulat, firma, db)
+  )
+
+  // ── Calculează discount per produs per UoM pentru fiecare scenariu ──
+  function applyRulesToPrices(rules) {
+    const result = {}
+    uomCodes.forEach(uomCode => {
+      let totalUom = 0
+      produse.forEach(produs => {
+        let pretUom = pricesPerUom[produs.id]?.[uomCode]
+        if (pretUom == null) return
+
+        rules.forEach(rule => {
+          const a = rule.actiune
+          if (!a) return
+          const targetsProdus = a.productIdTinta === produs.id
+          const targetsAll = a.tip?.includes('total')
+
+          if (targetsProdus || targetsAll) {
+            if (a.tip === 'discount_procent_linie' || a.tip === 'discount_procent_total') {
+              pretUom = pretUom * (1 - a.valoare / 100)
+            } else if (a.tip === 'produs_gratuit' && targetsProdus) {
+              // Reducere per unitate: câte role gratuite / coeficient UoM
+              const uomDef = (produs.product_uom || []).find(u => u.uom_code === uomCode)
+              const coef = uomDef?.coeficient || 1
+              const pretRola = pricesPerUom[produs.id]?.ROLA || 0
+              pretUom = Math.max(0, pretUom - (pretRola * (a.cantitateGratuita || 1) / coef))
+            }
+          }
+        })
+        totalUom += Math.max(0, pretUom)
+      })
+      result[uomCode] = Math.round(totalUom * 100) / 100
+    })
+    return result
+  }
+
+  // ── Construiește scenariile ──
+  const scenarios = []
+
+  // Scenariu 0: fără promoții
+  scenarios.push({
+    id: 'no_promo',
+    label: 'Fără promoții',
+    totals: applyRulesToPrices([]),
+    rules: []
+  })
+
+  // Un scenariu per promoție individuală
+  eligibleRules.forEach(rule => {
+    scenarios.push({
+      id: rule.id,
+      label: rule.name,
+      eticheta: rule.actiune?.eticheta,
+      totals: applyRulesToPrices([rule]),
+      rules: [rule.id]
+    })
+  })
+
+  // Scenarii cumulate (combinații de reguli combinabile)
+  const combinabile = eligibleRules.filter(r => r.combinabil !== false)
+  if (combinabile.length > 1) {
+    scenarios.push({
+      id: 'cumul_toate',
+      label: 'Cumul promoții: ' + combinabile.map(r => r.actiune?.eticheta || r.name).join(' + '),
+      totals: applyRulesToPrices(combinabile),
+      rules: combinabile.map(r => r.id)
+    })
+  }
+
+  return {
+    produse: produse.map(p => ({ id: p.id, name: p.name, cod: p.cod, imagine: p.imagine })),
+    pricesPerUom,
+    eligibleRules: eligibleRules.map(r => ({
+      id: r.id, name: r.name, eticheta: r.actiune?.eticheta,
+      conditii: r.conditii, tip: r.tip
+    })),
+    scenarios,
+    uomCodes
   }
 }
 
 // ── Notificări promoții aproape active ──
 export function getPromotiiNotificabile(liniiCos, firma, db) {
+  if (!liniiCos?.length) return []
   const notif = []
-  if (!liniiCos?.length) return notif
-
-  ;(db.promotionRules || [])
-    .filter(r => esteActiva(r))
-    .forEach(rule => {
-      if (!rule.conditii?.length) return
-
-      // Verifică prima condiție de tip produs
-      const primaCond = rule.conditii.find(c => c.tip === 'produs_in_cos' && c.productId)
-      if (!primaCond) return
-
-      const linieExista = liniiCos.find(l => l.productId === primaCond.productId)
-
-      if (linieExista && linieExista.cantRole < (primaCond.cantMin || 0)) {
-        const lipsesc = (primaCond.cantMin || 0) - linieExista.cantRole
-        const produs = db.products.find(p => p.id === primaCond.productId)
-        notif.push({
-          ruleId: rule.id,
-          tip: 'aproape_activa',
-          mesaj: `Adaugă încă ${lipsesc} role de ${produs?.name || primaCond.productId} pentru: "${rule.actiune?.eticheta || rule.name}"`,
-          productIdSugerat: null,
-        })
-      }
-
-      // Promoție cu produs țintă în coș dar condiție nesatisfăcută
-      if (rule.actiune?.productIdTinta) {
-        const cosIds = new Set(liniiCos.map(l => l.productId))
-        if (cosIds.has(rule.actiune.productIdTinta) && !linieExista) {
-          const produs = db.products.find(p => p.id === primaCond.productId)
-          notif.push({
-            ruleId: rule.id,
-            tip: 'promotie_disponibila',
-            mesaj: `Promoție: "${rule.actiune?.eticheta || rule.name}" — adaugă ${produs?.name} în coș`,
-            productIdSugerat: primaCond.productId,
-          })
-        }
-      }
-    })
-
+  ;(db.promotionRules || []).filter(r => esteActiva(r)).forEach(rule => {
+    const primaCond = (rule.conditii || []).find(c => c.tip === 'produs_in_cos' && c.productId)
+    if (!primaCond) return
+    const linie = liniiCos.find(l => l.productId === primaCond.productId)
+    if (linie && linie.cantRole < (primaCond.cantMin || 0)) {
+      const lipsesc = (primaCond.cantMin || 0) - linie.cantRole
+      const produs = (db.products || []).find(p => p.id === primaCond.productId)
+      notif.push({
+        ruleId: rule.id,
+        tip: 'aproape_activa',
+        mesaj: `Adaugă încă ${lipsesc} role de ${produs?.name || primaCond.productId} pentru: "${rule.actiune?.eticheta || rule.name}"`,
+        productIdSugerat: primaCond.productId
+      })
+    }
+  })
   return notif
 }

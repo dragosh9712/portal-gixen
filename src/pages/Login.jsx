@@ -40,7 +40,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Email</label>
+            <label>Email sau nume utilizator</label>
             <input type="text" className="w-full" placeholder="email@firma.ro"
               value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
           </div>
@@ -56,10 +56,15 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: 20, textAlign: 'center' }}>
-          <span style={{ fontSize: 13, color: 'var(--text3)' }}>Cont nou? </span>
-          <a href="/onboarding" style={{ fontSize: 13, color: 'var(--blue)', textDecoration: 'none', fontWeight: 500 }}>
-            Solicită acces →
+        <div style={{ marginTop: 20, textAlign: 'center', display: 'flex', justifyContent: 'space-between' }}>
+          <span>
+            <span style={{ fontSize: 13, color: 'var(--text3)' }}>Cont nou? </span>
+            <a href="/onboarding" style={{ fontSize: 13, color: 'var(--blue)', textDecoration: 'none', fontWeight: 500 }}>
+              Solicită acces →
+            </a>
+          </span>
+          <a href="/reset-parola" style={{ fontSize: 13, color: 'var(--text3)', textDecoration: 'none' }}>
+            Ai uitat parola?
           </a>
         </div>
       </div>
