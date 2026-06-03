@@ -400,15 +400,43 @@ export function StoreProvider({ children }) {
     setDb(prev => ({ ...prev, offers: prev.offers.filter(o => o.id !== offerId) }))
   }
 
+  // ── Agents CRUD ──
+  async function createAgent(data) {
+    const result = await api.agents.create(data)
+    const newAgent = { id: result?.id || 'ag_' + Date.now(), ...data, is_active: true }
+    setDb(prev => ({ ...prev, agents: [...(prev.agents || []), newAgent] }))
+    // reload to get commission rule created by backend
+    const updated = await api.agents.list()
+    const updatedRules = await api.commissionRules.list()
+    setDb(prev => ({ ...prev, agents: updated || prev.agents, commission_rules: updatedRules || prev.commission_rules }))
+    return newAgent
+  }
+
+  async function updateAgent(id, data) {
+    await api.agents.update(id, data)
+    setDb(prev => ({ ...prev, agents: prev.agents.map(a => a.id === id ? { ...a, ...data } : a) }))
+  }
+
+  async function deleteAgent(id) {
+    await api.agents.delete(id)
+    setDb(prev => ({ ...prev, agents: prev.agents.filter(a => a.id !== id) }))
+  }
+
   // ── Commission Rules ──
-  function saveCommissionRule(rule) {
-    setDb(prev => {
-      const rules = [...(prev.commissionRules || [])]
-      const idx = rules.findIndex(r => r.id === rule.id)
-      if (idx >= 0) rules[idx] = rule
-      else rules.push({ id: 'cr_' + Date.now(), ...rule })
-      return { ...prev, commissionRules: rules }
-    })
+  async function saveCommissionRule(rule) {
+    if (rule.id && !rule.id.startsWith('cr_fake')) {
+      // update existing
+      await api.commissionRules.update(rule.id, rule)
+      setDb(prev => ({
+        ...prev,
+        commission_rules: (prev.commission_rules || []).map(r => r.id === rule.id ? { ...r, ...rule } : r),
+      }))
+    } else {
+      // create new
+      const result = await api.commissionRules.create(rule)
+      const newRule = { ...rule, id: result?.id || 'cr_' + Date.now(), is_active: 1 }
+      setDb(prev => ({ ...prev, commission_rules: [...(prev.commission_rules || []), newRule] }))
+    }
   }
 
   async function addCommissionRule(rule) {
@@ -430,8 +458,14 @@ export function StoreProvider({ children }) {
     }))
   }
 
-  function toggleCommissionRule(id) {
-    setDb(prev => ({ ...prev, commissionRules: (prev.commissionRules || []).map(r => r.id === id ? { ...r, activ: !r.activ } : r) }))
+  async function toggleCommissionRule(id) {
+    const rule = (db.commission_rules || []).find(r => r.id === id)
+    const newActive = rule ? !rule.is_active : false
+    await api.commissionRules.update(id, { is_active: newActive })
+    setDb(prev => ({
+      ...prev,
+      commission_rules: (prev.commission_rules || []).map(r => r.id === id ? { ...r, is_active: newActive ? 1 : 0 } : r),
+    }))
   }
 
   // ── Locations ──
@@ -547,6 +581,8 @@ export function StoreProvider({ children }) {
       // Orders
       updateOrderStatus, addNotaInterna, createOrder, bulkUpdateOrderStatus,
       updateTransport, updateDocumente, updateAdresaLivrare, setFactura,
+      // Agents
+      createAgent, updateAgent, deleteAgent,
       // Customers
       registerNewClient, approveFirm, rejectFirm, updateFirm,
       // Delegates

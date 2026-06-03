@@ -7,7 +7,7 @@ function Toast({ msg, type, onDone }) {
 }
 
 export default function AdminComisioane() {
-  const { db, saveCommissionRule, deleteCommissionRule, toggleCommissionRule, updateDb } = useStore()
+  const { db, saveCommissionRule, deleteCommissionRule, toggleCommissionRule, createAgent, updateAgent, deleteAgent } = useStore()
   const [form, setForm] = useState({ agent_id: '', product_id: '', customer_id: '', rate: 1.5, priority: 10, notes: '' })
   const [editId, setEditId] = useState(null)
   const [toast, setToast] = useState(null)
@@ -25,51 +25,39 @@ export default function AdminComisioane() {
   function showToast(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 2500) }
 
   // ── Agent CRUD ──
-  function handleSaveAgent() {
+  async function handleSaveAgent() {
     if (!agentForm.name.trim()) return showToast('Completează numele agentului', 'error')
-    if (editAgentId) {
-      // update
-      if (updateDb) {
-        updateDb(d => {
-          const idx = d.agents.findIndex(a => a.id === editAgentId)
-          if (idx >= 0) d.agents[idx] = { ...d.agents[idx], ...agentForm }
-        })
+    try {
+      if (editAgentId) {
+        await updateAgent(editAgentId, agentForm)
+      } else {
+        await createAgent({ ...agentForm, default_rate: 1.5 })
       }
-    } else {
-      // add
-      const newAgent = { id: 'ag_' + Date.now(), ...agentForm, is_active: true }
-      if (updateDb) {
-        updateDb(d => { d.agents.push(newAgent) })
-        // Add default commission rule
-        updateDb(d => {
-          if (!d.commission_rules) d.commission_rules = []
-          d.commission_rules.push({ id: Date.now(), agent_id: newAgent.id, product_id: null, customer_id: null, rate: 1.5, priority: 10, is_active: true, notes: `Marja default ${agentForm.name}` })
-        })
-      }
+      setShowAgentForm(false)
+      setAgentForm({ name: '', email: '', phone: '' })
+      setEditAgentId(null)
+      showToast(editAgentId ? 'Agent actualizat!' : 'Agent adăugat!')
+    } catch (err) {
+      showToast(err.message || 'Eroare la salvare', 'error')
     }
-    setShowAgentForm(false)
-    setAgentForm({ name: '', email: '', phone: '' })
-    setEditAgentId(null)
-    showToast(editAgentId ? 'Agent actualizat!' : 'Agent adăugat!')
   }
 
-  function handleToggleAgent(agentId) {
-    if (updateDb) {
-      updateDb(d => { const a = d.agents.find(x => x.id === agentId); if (a) a.is_active = !a.is_active })
-    }
-    showToast('Status agent actualizat!')
+  async function handleToggleAgent(agentId) {
+    const agent = agents.find(a => a.id === agentId)
+    if (!agent) return
+    try {
+      await updateAgent(agentId, { ...agent, is_active: !agent.is_active })
+      showToast('Status agent actualizat!')
+    } catch (err) { showToast(err.message, 'error') }
   }
 
-  function handleDeleteAgent(agentId) {
+  async function handleDeleteAgent(agentId) {
     const hasClients = firms.some(f => f.agent_id === agentId)
     if (hasClients) return showToast('Nu poți șterge un agent cu clienți asignați!', 'error')
-    if (updateDb) {
-      updateDb(d => {
-        d.agents = d.agents.filter(a => a.id !== agentId)
-        d.commission_rules = (d.commission_rules || []).filter(r => r.agent_id !== agentId)
-      })
-    }
-    showToast('Agent șters!', 'error')
+    try {
+      await deleteAgent(agentId)
+      showToast('Agent șters!', 'error')
+    } catch (err) { showToast(err.message, 'error') }
   }
 
   function handleEditAgent(agent) {
@@ -79,13 +67,17 @@ export default function AdminComisioane() {
   }
 
   // ── Commission rule CRUD ──
-  function handleSave() {
+  async function handleSave() {
     if (!form.agent_id) return showToast('Selectează agentul', 'error')
     if (form.rate < 0 || form.rate > 10) return showToast('Rata trebuie 0–10%', 'error')
-    saveCommissionRule({ id: editId || undefined, ...form, is_active: true })
-    setForm({ agent_id: '', product_id: '', customer_id: '', rate: 1.5, priority: 10, notes: '' })
-    setEditId(null)
-    showToast('Regulă salvată!')
+    try {
+      await saveCommissionRule({ id: editId || undefined, ...form, is_active: true })
+      setForm({ agent_id: '', product_id: '', customer_id: '', rate: 1.5, priority: 10, notes: '' })
+      setEditId(null)
+      showToast('Regulă salvată!')
+    } catch (err) {
+      showToast(err.message || 'Eroare la salvare', 'error')
+    }
   }
 
   function handleEdit(rule) {

@@ -19,6 +19,14 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       INSERT INTO agents (id, name, email, phone, is_active, created_at)
       VALUES (@id, @name, @email, @phone, 1, GETDATE())
     `, { id, name: a.name, email: a.email || '', phone: a.phone || '' })
+    // Crează regulă de comision default
+    const ruleId = 'cr_' + Date.now()
+    try {
+      await query(
+        `INSERT INTO commission_rules (id, agent_id, rate, priority, notes, is_active) VALUES (@rid, @aid, @rate, 10, @notes, 1)`,
+        { rid: ruleId, aid: id, rate: a.default_rate || 1.5, notes: `Marja default ${a.name}` }
+      )
+    } catch (_) { /* commission_rules poate să nu aibă coloana id — ignorăm */ }
     res.status(201).json({ id, message: 'Agent creat' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -28,8 +36,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const a = req.body
     await query(`
-      UPDATE agents SET name = @name, email = @email, phone = @phone WHERE id = @id
-    `, { id: req.params.id, name: a.name, email: a.email || '', phone: a.phone || '' })
+      UPDATE agents SET name = @name, email = @email, phone = @phone, is_active = @active WHERE id = @id
+    `, { id: req.params.id, name: a.name, email: a.email || '', phone: a.phone || '', active: a.is_active !== false ? 1 : 0 })
     res.json({ message: 'Agent actualizat' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
