@@ -19,7 +19,7 @@ export function StoreProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [orders, customers, products, promotions, agents, locations, exchange, offers, uoms, surveys] =
+      const [orders, customers, products, promotions, agents, locations, exchange, offers, uoms, surveys, commRules] =
         await Promise.allSettled([
           api.orders.list({ limit: 200 }),
           api.customers.list(),
@@ -31,6 +31,7 @@ export function StoreProvider({ children }) {
           api.offers.list(),
           api.uom.list(),
           api.surveys.list(),
+          api.commissionRules.list(),
         ])
       setDb(prev => ({
         ...prev,
@@ -38,12 +39,22 @@ export function StoreProvider({ children }) {
         firms:            customers.status  === 'fulfilled' ? (customers.value || [])  : prev.firms,
         products:         products.status   === 'fulfilled' ? (products.value || [])   : prev.products,
         promotions:       promotions.status === 'fulfilled' ? (promotions.value || []) : prev.promotions,
+        promotionRules:   promotions.status === 'fulfilled' ? (promotions.value || []).map(p => ({
+          ...p,
+          activ: !!p.is_active,
+          conditii: p.conditions || [],
+          actiune: (p.actions || [])[0] || {},
+          combinabil: !!p.cumulative,
+          prioritate: p.priority,
+          tip: p.rule_type,
+        })) : prev.promotionRules,
         agents:           agents.status     === 'fulfilled' ? (agents.value || [])     : prev.agents,
         locations:        locations.status  === 'fulfilled' ? (locations.value || [])  : prev.locations,
         exchange:         exchange.status   === 'fulfilled' ? exchange.value           : prev.exchange,
         offers:           offers.status     === 'fulfilled' ? (offers.value || [])     : prev.offers,
         unit_of_measure:  uoms.status       === 'fulfilled' ? (uoms.value || [])       : prev.unit_of_measure,
         surveys:          surveys.status    === 'fulfilled' ? (surveys.value || [])    : prev.surveys,
+        commission_rules: commRules.status  === 'fulfilled' ? (commRules.value || [])  : prev.commission_rules,
       }))
     } catch (err) {
       setError(err.message)
@@ -195,7 +206,7 @@ export function StoreProvider({ children }) {
 
   // ── Delegates ──
   async function addDelegate(firmId, delegateData) {
-    await api.customers.update(firmId, { addDelegate: delegateData })
+    await api.customers.addDelegate(firmId, delegateData)
     await refreshCustomers()
   }
 
@@ -333,15 +344,38 @@ export function StoreProvider({ children }) {
     setDb(prev => ({ ...prev, promotions: prev.promotions.map(p => p.id === id ? { ...p, activa: !p.activa } : p) }))
   }
 
-  function addPromotionRule(rule) {
-    setDb(prev => ({ ...prev, promotionRules: [...(prev.promotionRules || []), { id: 'rule_' + Date.now(), ...rule }] }))
+  async function addPromotionRule(rule) {
+    const apiPayload = {
+      name: rule.name,
+      rule_type: rule.tip || 'LINE_DISCOUNT',
+      priority: rule.prioritate || 10,
+      activa: rule.activ !== false,
+      cumulative: !!rule.combinabil,
+      conditions: rule.conditii || [],
+      actions: rule.actiune ? [rule.actiune] : [],
+    }
+    const result = await api.promotions.save(apiPayload)
+    const newRule = { ...rule, id: result?.id || 'rule_' + Date.now() }
+    setDb(prev => ({ ...prev, promotionRules: [...(prev.promotionRules || []), newRule] }))
   }
 
-  function updatePromotionRule(id, data) {
+  async function updatePromotionRule(id, data) {
+    const apiPayload = {
+      name: data.name,
+      rule_type: data.tip || 'LINE_DISCOUNT',
+      priority: data.prioritate || 10,
+      activa: data.activ !== false,
+      cumulative: !!data.combinabil,
+      conditions: data.conditii || [],
+      actions: data.actiune ? [data.actiune] : [],
+    }
+    await api.promotions.update(id, apiPayload)
     setDb(prev => ({ ...prev, promotionRules: (prev.promotionRules || []).map(r => r.id === id ? { ...r, ...data } : r) }))
   }
 
-  function togglePromotionRule(id) {
+  async function togglePromotionRule(id) {
+    const rule = db.promotionRules?.find(r => r.id === id)
+    if (rule) await api.promotions.update(id, { activa: !rule.activ })
     setDb(prev => ({ ...prev, promotionRules: (prev.promotionRules || []).map(r => r.id === id ? { ...r, activ: !r.activ } : r) }))
   }
 
@@ -377,8 +411,23 @@ export function StoreProvider({ children }) {
     })
   }
 
-  function deleteCommissionRule(id) {
-    setDb(prev => ({ ...prev, commissionRules: (prev.commissionRules || []).filter(r => r.id !== id) }))
+  async function addCommissionRule(rule) {
+    const result = await api.commissionRules.create(rule)
+    const newRule = { ...rule, id: result?.id || 'cr_' + Date.now(), is_active: 1 }
+    setDb(prev => {
+      const rules = [...(prev.commissionRules || [])]
+      rules.push(newRule)
+      return { ...prev, commissionRules: rules, commission_rules: [...(prev.commission_rules || []), newRule] }
+    })
+  }
+
+  async function deleteCommissionRule(id) {
+    await api.commissionRules.delete(id)
+    setDb(prev => ({
+      ...prev,
+      commissionRules: (prev.commissionRules || []).filter(r => r.id !== id),
+      commission_rules: (prev.commission_rules || []).filter(r => r.id !== id),
+    }))
   }
 
   function toggleCommissionRule(id) {
@@ -516,7 +565,7 @@ export function StoreProvider({ children }) {
       // Offers
       saveOffer, updateOfferStatus, deleteOffer,
       // Commission rules
-      saveCommissionRule, deleteCommissionRule, toggleCommissionRule,
+      saveCommissionRule, addCommissionRule, deleteCommissionRule, toggleCommissionRule,
       // Locations
       saveLocation, setDefaultLocation,
       // UoM

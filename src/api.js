@@ -19,7 +19,7 @@ async function req(method, path, body = null, isFormData = false) {
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   })
 
-  if (res.status === 401 || (res.status === 403 && path !== '/api/auth/login')) {
+  if ((res.status === 401 || res.status === 403) && path !== '/api/auth/login') {
     setToken(null)
     localStorage.removeItem('gixen_user')
     window.location.href = '/login'
@@ -56,9 +56,11 @@ const api = {
     get:      id               => req('GET',  `/api/customers/${id}`),
     create:   data             => req('POST', '/api/customers', data),
     update:   (id, data)       => req('PUT',  `/api/customers/${id}`, data),
-    syncSS:   id               => req('POST', `/api/customers/${id}/selectsoft`),
-    credit:   id               => req('GET',  `/api/credit/${id}`),
-    setCredit:(id, data)       => req('PUT',  `/api/credit/${id}`, data),
+    syncSS:      id               => req('POST', `/api/customers/${id}/selectsoft`),
+    credit:      id               => req('GET',  `/api/credit/${id}`),
+    setCredit:   (id, data)       => req('PUT',  `/api/credit/${id}`, data),
+    addDelegate: (id, data)       => req('POST', `/api/customers/${id}/delegate`, data),
+    delegates:   id               => req('GET',  `/api/customers/${id}/delegates`),
   },
   orders: {
     list:      (p = {})        => req('GET',  '/api/orders?' + new URLSearchParams(p)),
@@ -93,6 +95,12 @@ const api = {
     list:   ()                 => req('GET',  '/api/promotions'),
     save:   data               => req('POST', '/api/promotions', data),
     update: (id, data)         => req('PUT',  `/api/promotions/${id}`, data),
+  },
+  commissionRules: {
+    list:   ()             => req('GET',    '/api/agents/commission-rules'),
+    create: data           => req('POST',   '/api/agents/commission-rules', data),
+    update: (id, data)     => req('PUT',    `/api/agents/commission-rules/${id}`, data),
+    delete: id             => req('DELETE', `/api/agents/commission-rules/${id}`),
   },
   surveys: {
     list:        ()          => req('GET',  '/api/surveys'),
