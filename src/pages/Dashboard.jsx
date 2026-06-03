@@ -1,15 +1,21 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
 import { lei, fmtDate, statusBadge } from '../utils'
+import SurveyPopup from '../components/SurveyPopup'
 
 export default function Dashboard() {
   const { user } = useAuth()
   const { db } = useStore()
   const navigate = useNavigate()
+  const [showSurvey, setShowSurvey] = useState(false)
+
+  useEffect(() => {
+    if (user && !user.survey_completed && user.role !== 'admin') setShowSurvey(true)
+  }, [user])
 
   const myOrders = db.orders.filter(o => o.firmId === user.firmId)
 
@@ -154,6 +160,7 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+      {showSurvey && <SurveyPopup onDone={() => setShowSurvey(false)} />}
     </Layout>
   )
 }
