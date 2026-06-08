@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { statusBadge, lei, fmtDate, fmtDateTime, getInitials } from '../utils'
@@ -12,7 +12,7 @@ export default function AdminClienti() {
   const {
     db, approveFirm, rejectFirm, updateFirm,
     setClientPricing, addDelegate, updateDelegate, deactivateDelegate,
-    generateOnboardingToken, getCreditLimit, syncClientsFromSelectSoft,
+    generateOnboardingToken, syncClientsFromSelectSoft,
     createClientInSelectSoft, syncCreditFromSelectSoft, getSurveyResult,
     saveCommissionRule, addDeliveryLocation, removeDeliveryLocation
   } = useStore()
@@ -28,6 +28,7 @@ export default function AdminClienti() {
   const [delegateForm, setDelegateForm] = useState({ name: '', email: '', password: 'welcome123', can_place_orders: true })
   const [creditEditMode, setCreditEditMode] = useState(false)
   const [creditForm, setCreditForm] = useState({})
+  const [creditData, setCreditData] = useState(null)
   const [resetPwModal, setResetPwModal] = useState(null)
   const [resetPwInput, setResetPwInput] = useState('')
 
@@ -41,13 +42,19 @@ export default function AdminClienti() {
   const agents = db.agents || []
   const allMarci = [...new Set((db.products || []).map(p => p.marca).filter(Boolean))]
 
-  function openClient(firm) {
+  async function openClient(firm) {
     setSelected(firm)
     setEditForm({ ...firm })
     setTab('info')
     setCreditEditMode(false)
-    const cl = getCreditLimit(firm.id)
-    setCreditForm(cl ? { ...cl } : { credit_limit: 0, limit_currency: firm.currency || 'RON', notification_threshold_pct: 80, block_on_exceed: false })
+    setCreditData(null)
+    try {
+      const cl = await api.customers.credit(firm.id)
+      setCreditData(cl)
+      setCreditForm(cl ? { ...cl } : { credit_limit: 0, limit_currency: firm.currency || 'RON', notification_threshold_pct: 80, block_on_exceed: false })
+    } catch {
+      setCreditForm({ credit_limit: 0, limit_currency: firm.currency || 'RON', notification_threshold_pct: 80, block_on_exceed: false })
+    }
   }
 
   function showToast(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 2500) }
@@ -80,23 +87,29 @@ export default function AdminClienti() {
     showToast('Link copiat!')
   }
 
-  // Bug 1: Salvare credit limit editabil
-  function handleSaveCreditLimit() {
+  async function handleSaveCreditLimit() {
     if (!selected) return
-    saveCreditLimit(selected.id, {
+    const payload = {
       credit_limit: parseFloat(creditForm.credit_limit) || 0,
       limit_currency: creditForm.limit_currency || 'RON',
       notification_threshold_pct: parseInt(creditForm.notification_threshold_pct) || 80,
       block_on_exceed: creditForm.block_on_exceed || false,
-      used_credit: getCreditLimit(selected.id)?.used_credit || 0,
-    })
-    setCreditEditMode(false)
-    showToast('Limită credit salvată!')
+    }
+    try {
+      await api.credit.update(selected.id, payload)
+      const updated = { ...payload, used_credit: creditData?.used_credit || 0, available_credit: Math.max(0, payload.credit_limit - (creditData?.used_credit || 0)) }
+      setCreditData(updated)
+      setCreditForm(updated)
+      setCreditEditMode(false)
+      showToast('Limită credit salvată!')
+    } catch (err) {
+      showToast(err.message || 'Eroare la salvare', 'error')
+    }
   }
 
   const clientDelegates = selected ? (db.users || []).filter(u => u.firmId === selected.id && u.status !== 'inactive') : []
   const clientOrders = selected ? (db.orders || []).filter(o => o.firmId === selected.id) : []
-  const creditLimit = selected ? getCreditLimit(selected.id) : null
+  const creditLimit = creditData
   const clientPricing = selected ? (db.clientPricing || []).filter(c => c.firmId === selected.id) : []
   const surveyResult = selected ? getSurveyResult(selected.id) : null
   const creditPct = creditLimit?.credit_limit > 0 ? Math.round((creditLimit.used_credit / creditLimit.credit_limit) * 100) : 0
@@ -147,8 +160,7 @@ export default function AdminClienti() {
               {firms.map(firm => {
                 const agent = agents.find(a => a.id === firm.agent_id)
                 const orderCount = (db.orders || []).filter(o => o.firmId === firm.id).length
-                const cl = getCreditLimit(firm.id)
-                const clPct = cl?.credit_limit > 0 ? Math.round((cl.used_credit / cl.credit_limit) * 100) : null
+                const clPct = null // credit data loaded on open, not in list view
                 return (
                   <tr key={firm.id} style={{ cursor: 'pointer' }} onClick={() => openClient(firm)}>
                     <td>
@@ -417,7 +429,7 @@ export default function AdminClienti() {
                           </div>
                         </div>
                       </div>
-                      <button className="btn btn-secondary btn-sm" onClick={() => { setCreditEditMode(false); const cl = getCreditLimit(selected.id); setCreditForm(cl || {}) }}>Anulează</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => { setCreditEditMode(false); setCreditForm(creditData || {}) }}>Anulează</button>
                     </div>
                   ) : (
                     /* ── VIEW MODE ── */

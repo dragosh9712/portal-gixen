@@ -2,6 +2,7 @@ const router = require('express').Router()
 const bcrypt = require('bcryptjs')
 const { query } = require('../db')
 const { authenticateToken, requireAdmin } = require('../middleware/auth')
+const emailSvc = require('../emailService')
 
 // GET /api/customers
 router.get('/', authenticateToken, async (req, res) => {
@@ -74,6 +75,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
         `UPDATE users SET status = @status WHERE customer_id = @id`,
         { id: req.params.id, status: c.status }
       )
+      // Send onboarding emails on status change
+      const custResult = await query('SELECT name, email FROM customers WHERE id=@id', { id: req.params.id })
+      const cust = custResult.recordset[0]
+      if (cust) {
+        if (c.status === 'activ') {
+          emailSvc.sendOnboardingApproved(cust.email, cust.name).catch(() => {})
+        } else if (c.status === 'respinsa') {
+          emailSvc.sendOnboardingRejected(cust.email, cust.name, c.rejection_reason || '').catch(() => {})
+        }
+      }
     }
 
     res.json({ message: 'Actualizat' })

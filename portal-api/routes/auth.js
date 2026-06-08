@@ -1,7 +1,9 @@
 const router  = require('express').Router()
 const bcrypt  = require('bcryptjs')
+const crypto  = require('crypto')
 const { query } = require('../db')
 const { generateToken, authenticateToken, requireAdmin } = require('../middleware/auth')
+const email   = require('../emailService')
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -111,6 +113,7 @@ router.post('/register', async (req, res) => {
       { id: userId, email: contactEmail, hash, name, cid: firmId }
     )
 
+    email.sendOnboardingPending(contactEmail, numeFirma).catch(() => {})
     res.status(201).json({ message: 'Cont creat cu succes. Așteptați aprobarea.' })
   } catch (err) {
     console.error('Register error:', err.message)
@@ -164,16 +167,63 @@ router.put('/reset-password/:userId', authenticateToken, requireAdmin, async (re
   }
 })
 
-// POST /api/auth/forgot-password — user requests reset (admin will manually reset)
+// POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body
-    if (!email) return res.status(400).json({ error: 'Email obligatoriu' })
-    // Verify email exists (don't reveal if it doesn't for security)
-    await query('SELECT id FROM users WHERE email=@email', { email })
-    // In production this would send an email; for now just log and respond
-    console.log(`[RESET REQUEST] Email: ${email} — ${new Date().toISOString()}`)
-    res.json({ message: 'Cerere înregistrată. Un administrator va reseta parola.' })
+    const { email: userEmail } = req.body
+    if (!userEmail) return res.status(400).json({ error: 'Email obligatoriu' })
+
+    const result = await query('SELECT id FROM users WHERE email=@email AND status != \'inactive\'', { email: userEmail })
+    // Always respond success to avoid user enumeration
+    if (result.recordset.length === 0) {
+      return res.json({ message: 'Dacă adresa există, veți primi un email cu instrucțiuni.' })
+    }
+
+    // Auto-create token table if missing
+    await query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='password_reset_tokens')
+      CREATE TABLE password_reset_tokens (
+        token        VARCHAR(128) PRIMARY KEY,
+        user_id      VARCHAR(64) NOT NULL,
+        expires_at   DATETIME2   NOT NULL,
+        used         BIT         DEFAULT 0
+      )`)
+
+    const token = crypto.randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
+    await query(
+      'INSERT INTO password_reset_tokens (token, user_id, expires_at, used) VALUES (@token, @uid, @exp, 0)',
+      { token, uid: result.recordset[0].id, exp: expires }
+    )
+
+    const appUrl = process.env.APP_URL || 'https://portal.gixen.ro'
+    const resetLink = `${appUrl}/reset-parola?token=${token}`
+    await email.sendPasswordReset(userEmail, resetLink)
+
+    res.json({ message: 'Dacă adresa există, veți primi un email cu instrucțiuni.' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/auth/reset-password — confirm token and set new password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body
+    if (!token || !newPassword) return res.status(400).json({ error: 'Token și parolă obligatorii' })
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Parola trebuie să aibă minim 6 caractere' })
+
+    const result = await query(
+      'SELECT * FROM password_reset_tokens WHERE token=@token AND used=0 AND expires_at > SYSDATETIME()',
+      { token }
+    )
+    if (!result.recordset[0]) return res.status(400).json({ error: 'Link invalid sau expirat' })
+
+    const hash = await bcrypt.hash(newPassword, 10)
+    await query('UPDATE users SET password_hash=@hash WHERE id=@id', { hash, id: result.recordset[0].user_id })
+    await query('UPDATE password_reset_tokens SET used=1 WHERE token=@token', { token })
+
+    res.json({ message: 'Parola a fost resetată cu succes.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

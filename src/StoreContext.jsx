@@ -1,6 +1,6 @@
 // eslint-disable-next-line react-refresh/only-export-components
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import api from './apiClient'
+import api from './api'
 import { getPretPentruClient as engineGetPret } from './promoEngine.js'
 
 const StoreContext = createContext(null)
