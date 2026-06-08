@@ -3,6 +3,18 @@ export function lei(val) {
   return Number(val).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RON'
 }
 
+// ── TVA — sursă unică de adevăr ──
+export const TVA = 0.21
+export function cuTva(net) {
+  return Math.round((Number(net) || 0) * (1 + TVA) * 100) / 100
+}
+export function tvaVal(net) {
+  return Math.round((Number(net) || 0) * TVA * 100) / 100
+}
+export function leiCuTva(net) {
+  return lei(cuTva(net))
+}
+
 export function eur(val) {
   if (val == null || isNaN(val)) return '€0.00'
   return '€' + Number(val).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
-import { lei, fmtDate, statusBadge } from '../utils'
+import { lei, leiCuTva, cuTva, fmtDate, statusBadge } from '../utils'
 import SurveyPopup from '../components/SurveyPopup'
 
 export default function Dashboard() {
@@ -17,14 +17,16 @@ export default function Dashboard() {
     if (user && !user.survey_completed && user.role !== 'admin') setShowSurvey(true)
   }, [user])
 
-  const myOrders = db.orders.filter(o => o.firmId === user.firmId)
+  const clientId = user.customerId || user.firmId || null
+  const myOrders = db.orders.filter(o => o.firmId === clientId || o.customer_id === clientId)
 
   const kpi = useMemo(() => {
     const thisMonth = new Date().toISOString().slice(0, 7)
-    const luna = myOrders.filter(o => o.dataComanda?.startsWith(thisMonth))
+    const luna = myOrders.filter(o => (o.dataComanda || o.created_at || '').startsWith(thisMonth))
     const active = myOrders.filter(o => ['plasata','in_aprobare','aprobata','in_procesare'].includes(o.status))
-    const total = myOrders.reduce((s, o) => s + o.total, 0)
-    const valLuna = luna.reduce((s, o) => s + o.total, 0)
+    // Valori CU TVA (order.total e stocat net)
+    const total = myOrders.reduce((s, o) => s + cuTva(o.total), 0)
+    const valLuna = luna.reduce((s, o) => s + cuTva(o.total), 0)
     return { total: myOrders.length, active: active.length, valLuna, valTotal: total }
   }, [myOrders])
 
@@ -37,8 +39,8 @@ export default function Dashboard() {
       const key = d.toISOString().slice(0, 7)
       const label = d.toLocaleDateString('ro-RO', { month: 'short' })
       const val = myOrders
-        .filter(o => o.dataComanda?.startsWith(key))
-        .reduce((s, o) => s + o.total, 0)
+        .filter(o => (o.dataComanda || o.created_at || '').startsWith(key))
+        .reduce((s, o) => s + cuTva(o.total), 0)
       months.push({ label, val: Math.round(val) })
     }
     return months
@@ -143,7 +145,7 @@ export default function Dashboard() {
                 <tr key={order.id}>
                   <td><b>{order.nr}</b></td>
                   <td>{fmtDate(order.dataComanda)}</td>
-                  <td>{lei(order.total)}</td>
+                  <td>{leiCuTva(order.total)}</td>
                   <td>{statusBadge(order.status)}</td>
                   <td>{fmtDate(order.dataLivrare)}</td>
                   <td>

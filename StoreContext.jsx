@@ -1,6 +1,7 @@
 // eslint-disable-next-line react-refresh/only-export-components
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import api from './apiClient'
+import { getPretPentruClient as engineGetPret } from './promoEngine.js'
 
 const StoreContext = createContext(null)
 
@@ -47,6 +48,8 @@ export function StoreProvider({ children }) {
           combinabil: !!p.cumulative,
           prioritate: p.priority,
           tip: p.rule_type,
+          customer_ids: p.customer_ids || [],
+          restrictii: { dataStart: p.valid_from || null, dataEnd: p.valid_until || null },
         })) : prev.promotionRules,
         agents:           agents.status     === 'fulfilled' ? (agents.value || [])     : prev.agents,
         locations:        locations.status  === 'fulfilled' ? (locations.value || [])  : prev.locations,
@@ -300,22 +303,14 @@ export function StoreProvider({ children }) {
   }
 
   // ── Pricing ──
+  // Sursă unică de preț: delegă către motorul din promoEngine
+  // (base_price + comision agent → discount contractual). FĂRĂ tier-discount.
+  // Returnează preț per rolă, în RON. Conversia EUR se face la afișare.
   function getPretPentruClient(productOrId, firmOrId) {
     const product = typeof productOrId === 'string' ? (db.products || []).find(p => p.id === productOrId) : productOrId
     const firm    = typeof firmOrId    === 'string' ? (db.firms    || []).find(f => f.id === firmOrId)    : firmOrId
     if (!product) return 0
-    const basePrice = product.active_base_price || product.pret_ron || 0
-    if (!firm) return basePrice
-    const currency = firm.currency || 'RON'
-    const tier = firm.customer_group || firm.tier || 'standard'
-    const exchange = db.exchange?.rate || 5
-    const tierDiscounts = { platinum: 0.15, gold: 0.10, silver: 0.05, standard: 0 }
-    const discount = tierDiscounts[tier] || 0
-    const cpEntry = (db.clientPricing || []).find(cp => cp.firmId === firm.id && cp.productId === product.id)
-    const extraDiscount = cpEntry ? cpEntry.discountExtra / 100 : 0
-    let price = basePrice * (1 - discount) * (1 - extraDiscount)
-    if (currency === 'EUR') price = price / exchange
-    return Math.round(price * 100) / 100
+    return engineGetPret(product, firm, db)
   }
 
   function setClientPricing(firmId, productId, discountExtra) {

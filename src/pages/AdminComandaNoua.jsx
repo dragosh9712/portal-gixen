@@ -155,10 +155,10 @@ export default function AdminComandaNoua() {
   }
 
   function handlePlaceOrder() {
-    const lines = liniiCos.map(l => ({
+    const lines = liniiCalculate.map(l => ({
       productId: l.productId, cantitate: l.cantitate, unitateSel: l.unitateSel,
       uom_id: (l.produs.product_uom || []).find(u => u.uom_code === l.unitateSel)?.uom_id,
-      pretUnitar: Math.round(l.pretUnitar * getUomCoeficient(l.produs, l.unitateSel) * 100) / 100,
+      pretUnitar: Math.round(l.pretAfisatPerUm * 100) / 100,
       total: Math.round(l.totalBrutLinie * 100) / 100,
     }))
 

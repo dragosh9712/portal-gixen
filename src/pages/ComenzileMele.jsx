@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
-import { lei, fmtDate, statusBadge } from '../utils'
+import { lei, leiCuTva, cuTva, tvaVal, fmtDate, statusBadge } from '../utils'
 import StatusTracker from '../components/StatusTracker'
 import CopyButton from '../components/CopyButton'
 import TransportDocs from '../components/TransportDocs'
@@ -63,7 +63,7 @@ export default function ComenzileMele() {
                     </td>
                     <td>{fmtDate(order.dataComanda)}</td>
                     <td style={{ color: 'var(--text2)' }}>{order.lines.length} linie{order.lines.length !== 1 ? 'i' : ''}</td>
-                    <td><b>{lei(order.total)}</b></td>
+                    <td><b>{leiCuTva(order.total)}</b></td>
                     <td>{statusBadge(order.status)}</td>
                     <td>{fmtDate(order.dataLivrare)}</td>
                     <td>{order.nrFactura ? <span style={{ fontSize: 12, color: 'var(--blue)', cursor: 'pointer' }}>📄 {order.nrFactura}</span> : <span style={{ color: 'var(--text3)', fontSize: 12 }}>—</span>}</td>
@@ -100,28 +100,55 @@ export default function ComenzileMele() {
 
             <div className="section-title" style={{ marginBottom: 8 }}>Linii comandă</div>
             <table>
-              <thead><tr><th>Produs</th><th>Cant.</th><th>Preț/buc</th><th>Disc.</th><th className="text-right">Total</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Produs</th><th>UoM</th><th>Cant.</th>
+                  <th className="text-right">Preț/buc<br/><span style={{fontSize:10,color:'var(--text3)'}}>fără TVA</span></th>
+                  <th className="text-right">TVA 21%</th>
+                  <th className="text-right">Preț/buc<br/><span style={{fontSize:10,color:'var(--text3)'}}>cu TVA</span></th>
+                  <th className="text-right">Total<br/><span style={{fontSize:10,color:'var(--text3)'}}>cu TVA</span></th>
+                </tr>
+              </thead>
               <tbody>
                 {selected.lines.map((l, i) => {
                   const p = db.products.find(p => p.id === l.productId)
+                  const tva = tvaVal(l.pretUnitar)
+                  const pretCuTva = cuTva(l.pretUnitar)
+                  const totalLineCuTva = cuTva(l.total)
                   return (
                     <tr key={i}>
                       <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {p?.imagine && <img src={p.imagine} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} onError={e => e.target.style.display='none'} />}
                         {p?.name || l.productId}
                       </td>
+                      <td style={{fontSize:12,color:'var(--text2)'}}>{l.uom_code || l.unitateSel || '—'}</td>
                       <td>{l.cantitate}</td>
-                      <td>{lei(l.pretUnitar)}</td>
-                      <td>{l.discount > 0 ? `-${l.discount}%` : '—'}</td>
-                      <td className="text-right"><b>{lei(l.total)}</b></td>
+                      <td className="text-right">{lei(l.pretUnitar)}</td>
+                      <td className="text-right" style={{color:'var(--text3)'}}>{lei(tva)}</td>
+                      <td className="text-right">{lei(pretCuTva)}</td>
+                      <td className="text-right"><b>{lei(totalLineCuTva)}</b></td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-            <div className="summary-box" style={{ marginTop: 12 }}>
-              <div className="summary-line total"><span>Total</span><span>{lei(selected.total)}</span></div>
-            </div>
+            {(() => {
+              // order.total e NET autoritar (după discounturi). Subtotalul liniilor e brut (înainte de discount).
+              const subtotalLinii = selected.lines.reduce((s, l) => s + (l.total || 0), 0)
+              const netFinal = selected.total != null ? selected.total : subtotalLinii
+              const discount = Math.round((netFinal - subtotalLinii) * 100) / 100
+              return (
+                <div className="summary-box" style={{ marginTop: 12 }}>
+                  <div className="summary-line"><span>Subtotal fără TVA</span><span>{lei(subtotalLinii)}</span></div>
+                  {discount !== 0 && (
+                    <div className="summary-line" style={{ color: 'var(--green-text)' }}><span>Discount</span><span>{lei(discount)}</span></div>
+                  )}
+                  <div className="summary-line"><span>Net fără TVA</span><span>{lei(netFinal)}</span></div>
+                  <div className="summary-line"><span>TVA 21%</span><span>{lei(tvaVal(netFinal))}</span></div>
+                  <div className="summary-line total"><span>Total cu TVA</span><span>{leiCuTva(netFinal)}</span></div>
+                </div>
+              )
+            })()}
 
             <TransportDocs order={selected} />
 

@@ -1,70 +1,73 @@
-// Format currency
 export function lei(val) {
-  return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) + ' lei'
+  if (val == null || isNaN(val)) return '0,00 RON'
+  return Number(val).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RON'
 }
 
-// Format date
-export function fmtDate(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })
+// ── TVA — sursă unică de adevăr ──
+export const TVA = 0.21
+export function cuTva(net) {
+  return Math.round((Number(net) || 0) * (1 + TVA) * 100) / 100
+}
+export function tvaVal(net) {
+  return Math.round((Number(net) || 0) * TVA * 100) / 100
+}
+export function leiCuTva(net) {
+  return lei(cuTva(net))
 }
 
-// Order status badge
+export function eur(val) {
+  if (val == null || isNaN(val)) return '€0.00'
+  return '€' + Number(val).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+export function fmtDate(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+export function fmtDateTime(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })
+}
+
+const STATUS_MAP = {
+  in_aprobare:  { label: 'În aprobare',  cls: 'badge-yellow' },
+  aprobat:      { label: 'Aprobat',      cls: 'badge-blue' },
+  in_procesare: { label: 'În procesare', cls: 'badge-blue' },
+  livrat:       { label: 'Livrat',       cls: 'badge-green' },
+  anulat:       { label: 'Anulat',       cls: 'badge-red' },
+  activ:        { label: 'Activ',        cls: 'badge-green' },
+  inactiv:      { label: 'Inactiv',      cls: 'badge-gray' },
+  respinsa:     { label: 'Respinsă',     cls: 'badge-red' },
+  draft:        { label: 'Draft',        cls: 'badge-gray' },
+  trimisa:      { label: 'Trimisă',      cls: 'badge-blue' },
+  acceptata:    { label: 'Acceptată',    cls: 'badge-green' },
+  expirata:     { label: 'Expirată',     cls: 'badge-red' },
+}
+
 export function statusBadge(status) {
-  const map = {
-    draft:        { label: 'Draft',         cls: 'badge-gray' },
-    plasata:      { label: 'Plasată',        cls: 'badge-blue' },
-    in_aprobare:  { label: 'În aprobare',    cls: 'badge-orange' },
-    aprobata:     { label: 'Aprobată',       cls: 'badge-purple' },
-    in_procesare: { label: 'În procesare',   cls: 'badge-blue' },
-    livrata:      { label: 'Livrată',        cls: 'badge-green' },
-    anulata:      { label: 'Anulată',        cls: 'badge-red' },
-    activ:        { label: 'Activ',          cls: 'badge-green' },
-    in_aprobare_cont: { label: 'În aprobare', cls: 'badge-orange' },
-    respinsa:     { label: 'Respinsă',       cls: 'badge-red' },
-  }
-  const s = map[status] || { label: status, cls: 'badge-gray' }
+  const s = STATUS_MAP[status] || { label: status || '-', cls: 'badge-gray' }
   return <span className={`badge ${s.cls}`}>{s.label}</span>
 }
 
-// Compute line price considering tier + client discount + promo
-export function calcLinePrice(product, qty, firmId, db) {
-  // Tier pricing
-  const tier = product.tierPricing?.find(t => qty >= t.cantMin && qty <= t.cantMax)
-  let pret = tier ? tier.pret : product.pretBaza
+export function getInitials(name) {
+  if (!name) return '?'
+  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+}
 
-  // Client-specific extra discount on this product
-  const cp = db.clientPricing.find(c => c.firmId === firmId && c.productId === product.id)
-  const discClient = cp ? cp.discountExtra : 0
-
-  // Active promotion — per product (global or this firm)
-  const today = new Date().toISOString().split('T')[0]
-  const promo = db.promotions.find(p =>
-    p.activa &&
-    p.productId === product.id &&
-    (p.firmId === null || p.firmId === firmId) &&
-    p.dataStart <= today && p.dataEnd >= today
-  )
-  const discPromo = promo ? promo.discountPercent : 0
-
-  // Global firm discount
-  const firm = db.firms.find(f => f.id === firmId)
-  const discGlobal = firm ? (firm.discountGlobal || 0) : 0
-
-  // Best discount wins (nu cumulam)
-  const discTotal = Math.max(discClient, discPromo)
-
-  const pretFinal = pret * (1 - discTotal / 100) * (1 - discGlobal / 100)
-  const total = Math.round(pretFinal * qty * 100) / 100
-
-  return {
-    pretUnitar: Math.round(pretFinal * 100) / 100,
-    pretBazaTier: pret,
-    discTotal,
-    discPromo,
-    discClient,
-    discGlobal,
-    total,
-    promoLabel: promo ? promo.name : null
-  }
+export function calcLinePrice(product, qty, firm, exchange) {
+  if (!product) return 0
+  const currency = firm?.currency || 'RON'
+  const tier = firm?.tier || 'standard'
+  const rate = exchange?.rate || 5
+  const tierDiscounts = { platinum: 0.15, gold: 0.10, silver: 0.05, standard: 0 }
+  const discount = tierDiscounts[tier] || 0
+  let price = (product.pret_ron || 0) * (1 - discount)
+  if (currency === 'EUR') price = price / rate
+  return Math.round(price * qty * 100) / 100
 }

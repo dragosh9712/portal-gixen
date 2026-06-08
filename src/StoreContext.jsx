@@ -1,6 +1,7 @@
 // eslint-disable-next-line react-refresh/only-export-components
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import api from './api'
+import api from './apiClient'
+import { getPretPentruClient as engineGetPret } from './promoEngine.js'
 
 const StoreContext = createContext(null)
 
@@ -47,6 +48,8 @@ export function StoreProvider({ children }) {
           combinabil: !!p.cumulative,
           prioritate: p.priority,
           tip: p.rule_type,
+          customer_ids: p.customer_ids || [],
+          restrictii: { dataStart: p.valid_from || null, dataEnd: p.valid_until || null },
         })) : prev.promotionRules,
         agents:           agents.status     === 'fulfilled' ? (agents.value || [])     : prev.agents,
         locations:        locations.status  === 'fulfilled' ? (locations.value || [])  : prev.locations,
@@ -124,16 +127,18 @@ export function StoreProvider({ children }) {
     }))
   }
 
-  async function createOrder(firmId, userId, lines, dataLivrare, observatii, adresaLivrare, discountLinii) {
+  async function createOrder(firmId, userId, lines, dataLivrare, observatii, adresaLivrare, discountLinii, extra) {
     const total = lines.reduce((s, l) => s + l.total, 0)
     const discTotal = (discountLinii || []).reduce((s, d) => s + d.valoare, 0)
     const created = await api.orders.create({
-      firmId, userId, lines,
-      dataLivrare: dataLivrare || null,
-      observatii: observatii || '',
-      adresaLivrare: adresaLivrare || '',
+      customer_id: firmId,
+      user_id: userId,
+      lines,
+      delivery_address: adresaLivrare || '',
+      observations: observatii || '',
+      payment_type: extra?.payment_type || 'OP',
+      transport_type: extra?.transport_type || 'Van',
       total: Math.round((total + discTotal) * 100) / 100,
-      discountLinii: discountLinii || [],
     })
     await refreshOrders()
     return created
@@ -236,15 +241,23 @@ export function StoreProvider({ children }) {
     }))
   }
 
-  function checkCreditLimit(firmId, orderTotal) {
-    const firm = db.firms.find(f => f.id === firmId)
-    if (!firm?.credit_limit_data?.enabled) return { ok: true }
-    const limit = firm.credit_limit_data.limit || 0
-    const used = (db.orders || [])
-      .filter(o => o.firmId === firmId && !['livrat', 'anulat'].includes(o.status))
-      .reduce((s, o) => s + (o.total || 0), 0)
-    const remaining = limit - used
-    if (orderTotal > remaining) return { ok: false, limit, used, remaining }
+  async function checkCreditLimit(firmId, orderTotal) {
+    let creditData = null
+    try { creditData = await api.customers.credit(firmId) } catch { return { ok: true } }
+    const limit = creditData?.credit_limit || 0
+    if (limit <= 0) return { ok: true }
+    const available = creditData?.available_credit ?? (limit - (creditData?.used_credit || 0))
+    const threshold = creditData?.notification_threshold_pct || 80
+    const block = creditData?.block_on_exceed || false
+    const used = creditData?.used_credit || 0
+    const remaining = available
+    const pctUsed = limit > 0 ? ((used + orderTotal) / limit) * 100 : 0
+    if (orderTotal > remaining) {
+      return { ok: !block, block, warning: true, limit, used, remaining, orderTotal, message: `Limită credit depășită! Disponibil: ${remaining.toFixed(2)} RON, comandă: ${orderTotal.toFixed(2)} RON` }
+    }
+    if (pctUsed >= threshold) {
+      return { ok: true, warning: true, block: false, limit, used, remaining, orderTotal, message: `Atenție: ai utilizat ${pctUsed.toFixed(0)}% din limita de credit.` }
+    }
     return { ok: true, limit, used, remaining }
   }
 
@@ -266,8 +279,17 @@ export function StoreProvider({ children }) {
   }
 
   async function addProductPrice(productId, priceData) {
-    await api.products.update(productId, { addPrice: priceData })
-    await refreshProducts()
+    const result = await api.products.addPrice(productId, priceData)
+    // Actualizează local produsul cu noul preț (fără re-fetch complet)
+    setDb(prev => ({
+      ...prev,
+      products: prev.products.map(p => {
+        if (p.id !== productId) return p
+        const oldPrices = (p.product_prices || []).map(pr => ({ ...pr, is_active: false }))
+        const newPrice = { id: result.id || Date.now(), ...priceData, base_price_tva: result.base_price_tva, is_active: true, created_at: new Date().toISOString() }
+        return { ...p, product_prices: [newPrice, ...oldPrices], active_base_price: priceData.base_price }
+      })
+    }))
   }
 
   async function syncProductSelectSoft(productId) {
@@ -281,22 +303,14 @@ export function StoreProvider({ children }) {
   }
 
   // ── Pricing ──
+  // Sursă unică de preț: delegă către motorul din promoEngine
+  // (base_price + comision agent → discount contractual). FĂRĂ tier-discount.
+  // Returnează preț per rolă, în RON. Conversia EUR se face la afișare.
   function getPretPentruClient(productOrId, firmOrId) {
     const product = typeof productOrId === 'string' ? (db.products || []).find(p => p.id === productOrId) : productOrId
     const firm    = typeof firmOrId    === 'string' ? (db.firms    || []).find(f => f.id === firmOrId)    : firmOrId
     if (!product) return 0
-    const basePrice = product.active_base_price || product.pret_ron || 0
-    if (!firm) return basePrice
-    const currency = firm.currency || 'RON'
-    const tier = firm.customer_group || firm.tier || 'standard'
-    const exchange = db.exchange?.rate || 5
-    const tierDiscounts = { platinum: 0.15, gold: 0.10, silver: 0.05, standard: 0 }
-    const discount = tierDiscounts[tier] || 0
-    const cpEntry = (db.clientPricing || []).find(cp => cp.firmId === firm.id && cp.productId === product.id)
-    const extraDiscount = cpEntry ? cpEntry.discountExtra / 100 : 0
-    let price = basePrice * (1 - discount) * (1 - extraDiscount)
-    if (currency === 'EUR') price = price / exchange
-    return Math.round(price * 100) / 100
+    return engineGetPret(product, firm, db)
   }
 
   function setClientPricing(firmId, productId, discountExtra) {

@@ -7,10 +7,13 @@ const TODAY = () => new Date().toISOString().split('T')[0]
 
 function normalizeDate(d) {
   if (!d) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
-  const m = d.match(/^(\d{2})[\/\.](\d{2})[\/\.](\d{4})$/)
+  // ISO datetime ("2026-06-01T00:00:00...") sau Date → ia primii 10 caractere
+  if (d instanceof Date) return d.toISOString().slice(0, 10)
+  const s = String(d)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  const m = s.match(/^(\d{2})[\/\.](\d{2})[\/\.](\d{4})$/)
   if (m) return `${m[3]}-${m[2]}-${m[1]}`
-  return d
+  return s
 }
 
 // ── UoM conversie ──
@@ -65,14 +68,15 @@ export function getPretPentruClient(produs, firma, db) {
   return Math.round(pret * 100) / 100
 }
 
-// ── Verificare regulă activă ──
-function esteActiva(rule) {
+// ── Verificare regulă activă (+ filtru client) ──
+function esteActiva(rule, customerId) {
   if (!rule.activ) return false
   const azi = TODAY()
   const start = normalizeDate(rule.restrictii?.dataStart)
   const end = normalizeDate(rule.restrictii?.dataEnd)
   if (start && start > azi) return false
   if (end && end < azi) return false
+  if (rule.customer_ids?.length && customerId && !rule.customer_ids.includes(customerId)) return false
   return true
 }
 
@@ -90,20 +94,26 @@ function evalConditie(cond, liniiCos, totalBrut, firma, db) {
     case 'cumul_comenzi_luna': {
       if (!firma?.id) return false
       const now = new Date()
-      const stat = (db.monthly_order_stats || []).find(s =>
-        s.firm_id === firma.id && s.month === now.getMonth() + 1 && s.year === now.getFullYear()
-      )
-      return stat ? stat.order_count >= (cond.nr_comenzi_min || 1) : false
+      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const count = (db.orders || []).filter(o =>
+        (o.firmId === firma.id || o.customer_id === firma.id) &&
+        !['anulata', 'anulat'].includes(o.status) &&
+        (o.dataComanda || o.created_at || '').startsWith(ym)
+      ).length
+      return count >= (cond.nr_comenzi_min || 1)
     }
     case 'cumul_valoare_luna': {
       if (!firma?.id) return false
       const now = new Date()
-      const stat = (db.monthly_order_stats || []).find(s =>
-        s.firm_id === firma.id && s.month === now.getMonth() + 1 && s.year === now.getFullYear()
-      )
-      if (!stat) return false
-      const val = firma.currency === 'EUR' ? stat.total_value_eur : stat.total_value_ron
-      return val >= (cond.valoare_min || 0)
+      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const totalLuna = (db.orders || [])
+        .filter(o =>
+          (o.firmId === firma.id || o.customer_id === firma.id) &&
+          !['anulata', 'anulat'].includes(o.status) &&
+          (o.dataComanda || o.created_at || '').startsWith(ym)
+        )
+        .reduce((s, o) => s + (o.total || 0), 0)
+      return totalLuna >= (cond.valoare_min || 0)
     }
     default: return false
   }
@@ -138,7 +148,7 @@ export function calculeazaCos(liniiCos, firma, db, options = {}) {
 
   if (!skipPromoRules) {
     const rules = (db.promotionRules || [])
-      .filter(r => esteActiva(r))
+      .filter(r => esteActiva(r, firma?.id))
       .sort((a, b) => (a.prioritate || 99) - (b.prioritate || 99))
 
     const appliedIds = new Set()
@@ -178,15 +188,6 @@ export function calculeazaCos(liniiCos, firma, db, options = {}) {
           discountLinii.push({ refLinieIdx: idx, productId: a.productIdTinta, eticheta: `${a.eticheta || rule.name} (${cant} role gratuite)`, procent: null, valoare: Math.round(-liniiCalculate[idx].pretClient * cant * 100) / 100, tip: rule.tip, ruleId: rule.id })
           appliedIds.add(rule.id); break
         }
-      }
-    }
-
-    // Cumul lunar
-    for (const rule of rules.filter(r => r.scope === 'monthly_cumul')) {
-      if (!evalToateConditiile(rule.conditii, liniiCalculate, totalBrut, firma, db)) continue
-      if (rule.actiune?.tip === 'discount_procent_total') {
-        const baza = totalBrut + discountLinii.reduce((s, d) => s + d.valoare, 0)
-        discountLinii.push({ refLinieIdx: -1, productId: null, eticheta: rule.actiune.eticheta || rule.name, procent: rule.actiune.valoare, valoare: Math.round(-baza * rule.actiune.valoare / 100 * 100) / 100, tip: 'CUMUL_LUNAR', ruleId: rule.id })
       }
     }
   }
@@ -252,7 +253,7 @@ export function calculeazaOferta(productIds, firma, db) {
   const totalSimulat = liniiSimulate.reduce((s, l) => s + l.totalBrutLinie, 0)
 
   const eligibleRules = (db.promotionRules || []).filter(rule =>
-    esteActiva(rule) && evalToateConditiile(rule.conditii, liniiSimulate, totalSimulat, firma, db)
+    esteActiva(rule, firma?.id) && evalToateConditiile(rule.conditii, liniiSimulate, totalSimulat, firma, db)
   )
 
   // ── Calculează discount per produs per UoM pentru fiecare scenariu ──
@@ -338,7 +339,7 @@ export function calculeazaOferta(productIds, firma, db) {
 export function getPromotiiNotificabile(liniiCos, firma, db) {
   if (!liniiCos?.length) return []
   const notif = []
-  ;(db.promotionRules || []).filter(r => esteActiva(r)).forEach(rule => {
+  ;(db.promotionRules || []).filter(r => esteActiva(r, firma?.id)).forEach(rule => {
     const primaCond = (rule.conditii || []).find(c => c.tip === 'produs_in_cos' && c.productId)
     if (!primaCond) return
     const linie = liniiCos.find(l => l.productId === primaCond.productId)
