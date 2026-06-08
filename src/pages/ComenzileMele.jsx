@@ -17,7 +17,8 @@ export default function ComenzileMele() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
 
-  const myOrders = db.orders.filter(o => o.firmId === user.firmId)
+  const clientId = user.customerId || user.firmId || null
+  const myOrders = db.orders.filter(o => o.firmId === clientId || o.customer_id === clientId)
   const filtered = myOrders.filter(o => {
     const matchStatus = filterStatus === 'toate' || o.status === filterStatus
     const matchSearch = o.nr.toLowerCase().includes(search.toLowerCase())

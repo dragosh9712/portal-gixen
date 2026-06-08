@@ -56,14 +56,22 @@ export default function ComandaNoua() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const firma = (db.firms || []).find(f => f.id === user.firmId)
+  const clientId = user.customerId || user.firmId || null
+  const firma = (db.firms || []).find(f => f.id === clientId)
   const isEur = firma?.currency === 'EUR'
   const exRate = getExchangeRate('EUR')
-  const marciPermise = firma?.marciPermise || []
+  const vizProduse = firma?.vizibilitate_produse || 'gixen_si_proprii'
 
-  const produse = (db.products || []).filter(p =>
-    p.activ && (marciPermise.length === 0 || marciPermise.includes(p.marca))
-  )
+  const produse = (db.products || []).filter(p => {
+    if (!p.activ) return false
+    const isPrivatAl  = p.private_brand_firm_id === clientId
+    const isGixen     = !p.private_brand_firm_id
+    const isAltClient = p.private_brand_firm_id && !isPrivatAl
+    if (isAltClient) return false
+    if (vizProduse === 'doar_proprii' && !isPrivatAl) return false
+    if (vizProduse === 'gixen_only'   && !isGixen)   return false
+    return true
+  })
 
   const [cart, setCart] = useState({})
   const [dataLivrare, setDataLivrare] = useState('')
@@ -99,8 +107,13 @@ export default function ComandaNoua() {
     return uom?.coeficient || 1
   }
 
+  // Unitatea de măsură atribuită clientului (paletizarea preferată)
+  const assignedUom = firma?.paletizare_preferata || null
+
   function getDefaultUom(product) {
     const uoms = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
+    // Dacă firma are o unitate atribuită și produsul o suportă, o folosim forțat
+    if (assignedUom && uoms.some(u => u.uom_code === assignedUom)) return assignedUom
     // Default BAX (nu rolă singulară)
     return uoms.find(u => u.uom_code === 'BAX')?.uom_code || uoms[0]?.uom_code || 'BAX'
   }
@@ -111,7 +124,7 @@ export default function ComandaNoua() {
       if (!produs || !cantitate) return null
       const coef = getUomCoeficient(produs, unitateSel)
       const cantRole = cantitate * coef
-      const pretClient = getPretPentruClient(productId, user.firmId)
+      const pretClient = getPretPentruClient(productId, clientId)
       return { productId, cantitate, unitateSel, cantRole, produs, totalBrutLinie: pretClient * cantRole, pretUnitar: pretClient }
     }).filter(Boolean)
   }, [cart, produse, user.firmId])
@@ -152,9 +165,9 @@ export default function ComandaNoua() {
     return lei(val)
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!liniiCos.length) return setToast({ msg: 'Coșul este gol!', type: 'error' })
-    const creditCheck = checkCreditLimit(user.firmId, totalCuTva)
+    const creditCheck = await checkCreditLimit(clientId, totalCuTva)
     if (creditCheck.warning) {
       setCreditWarning({ ...creditCheck, orderTotal: totalCuTva })
       if (creditCheck.block) { setToast({ msg: creditCheck.message, type: 'error' }); return }
@@ -166,10 +179,10 @@ export default function ComandaNoua() {
     const lines = liniiCos.map(l => ({
       productId: l.productId, cantitate: l.cantitate, unitateSel: l.unitateSel,
       uom_id: (l.produs.product_uom || []).find(u => u.uom_code === l.unitateSel)?.uom_id,
-      pretUnitar: Math.round(l.pretUnitar * 100) / 100, total: Math.round(l.totalBrutLinie * 100) / 100
+      pretUnitar: Math.round(l.pretUnitar * getUomCoeficient(l.produs, l.unitateSel) * 100) / 100, total: Math.round(l.totalBrutLinie * 100) / 100
     }))
     createOrder(
-      user.firmId, user.id, lines, dataLivrare, observatii,
+      clientId, user.id, lines, dataLivrare, observatii,
       selectedDelivery?.adresa || '', discountLinii,
       { payment_type: paymentType, transport_type: autoTransportType }
     )
@@ -217,18 +230,22 @@ export default function ComandaNoua() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {filteredProduse.map(product => {
               const inCart = cart[product.id]
-              const currentUom = inCart?.unitateSel || getDefaultUom(product)
+              // Dacă firma are unitate atribuită și produsul o suportă → blocăm pe acea unitate
+              const lockedUom = assignedUom && (product.product_uom || []).some(u => u.is_orderable && u.uom_code === assignedUom) ? assignedUom : null
+              const currentUom = lockedUom || inCart?.unitateSel || getDefaultUom(product)
               // Bug 13: UoM la nivel de bax/palet (nu rolă ca default)
               // Bug 14: filtrăm palet incompatibil cu transportul auto-detectat
-              const relevantUoms = getRelevantUoms(product, autoTransportType)
+              const relevantUoms = lockedUom
+                ? (product.product_uom || []).filter(u => u.uom_code === lockedUom)
+                : getRelevantUoms(product, autoTransportType)
               const pretUom = getPretPerUom(product, currentUom)
 
               return (
-                <div key={product.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <ProductImg src={product.imagine} name={product.name} />
+                <div key={product.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <ProductImg src={product.imagine || product.image_url} name={product.name} />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 1 }}>{product.name}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 1, whiteSpace: 'normal', wordBreak: 'break-word' }}>{product.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--text3)' }}>
                       {product.brand} · {product.product_type}
                       {/* Bug 15: clientul NU vede stocul */}
@@ -287,7 +304,15 @@ export default function ComandaNoua() {
           <div className="card" style={{ marginBottom: 12 }}>
             <div className="section-title" style={{ marginBottom: 12 }}>Coș ({liniiCos.length} produse)</div>
 
-            {/* Bug 14: Transport auto-detectat */}
+            {/* Paletizare preferată client */}
+            {firma?.paletizare_preferata && (
+              <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '6px 12px', marginBottom: 8, fontSize: 11, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📦</span>
+                <span>Paletizare preferată: <strong>{firma.paletizare_preferata}</strong></span>
+              </div>
+            )}
+
+            {/* Transport auto-detectat */}
             {liniiCos.length > 0 && (
               <div style={{ background: autoTransportType === 'Truck' ? 'var(--purple-bg)' : 'var(--blue-bg)', borderRadius: 8, padding: '7px 12px', marginBottom: 10, fontSize: 12, color: autoTransportType === 'Truck' ? 'var(--purple-text)' : 'var(--blue-text)' }}>
                 🚚 Transport auto-detectat: <strong>{autoTransportType === 'Truck' ? 'TIR / Camion' : 'Duba (Van)'}</strong>

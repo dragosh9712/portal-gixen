@@ -41,10 +41,17 @@ export default function AdminComandaNoua() {
   // Produse vizibile pentru firma selectată
   const produse = useMemo(() => {
     if (!firma) return []
-    const marci = firma.marciPermise || []
-    return (db.products || []).filter(p =>
-      p.activ && (marci.length === 0 || marci.includes(p.marca))
-    )
+    const vizProduse = firma.vizibilitate_produse || 'gixen_si_proprii'
+    return (db.products || []).filter(p => {
+      if (!p.activ) return false
+      const isPrivatAl  = p.private_brand_firm_id === firma.id
+      const isGixen     = !p.private_brand_firm_id
+      const isAltClient = p.private_brand_firm_id && !isPrivatAl
+      if (isAltClient) return false
+      if (vizProduse === 'doar_proprii' && !isPrivatAl) return false
+      if (vizProduse === 'gixen_only'   && !isGixen)   return false
+      return true
+    })
   }, [firma, db.products])
 
   const [cart, setCart] = useState({})
@@ -76,8 +83,12 @@ export default function AdminComandaNoua() {
     return uom?.coeficient || 1
   }
 
+  // Unitatea de măsură atribuită clientului (paletizarea preferată)
+  const assignedUom = firma?.paletizare_preferata || null
+
   function getFirstUom(product) {
     const uoms = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
+    if (assignedUom && uoms.some(u => u.uom_code === assignedUom)) return assignedUom
     return uoms[0]?.uom_code || 'ROLA'
   }
 
@@ -132,10 +143,10 @@ export default function AdminComandaNoua() {
     return lei(val)
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!firma) return setToast({ msg: 'Selectează firma client!', type: 'error' })
     if (!liniiCos.length) return setToast({ msg: 'Coșul este gol!', type: 'error' })
-    const creditCheck = checkCreditLimit(firma.id, totalCuTva)
+    const creditCheck = await checkCreditLimit(firma.id, totalCuTva)
     if (creditCheck.warning) {
       setCreditWarning(creditCheck.message)
       if (creditCheck.block) { setToast({ msg: creditCheck.message, type: 'error' }); return }
@@ -147,7 +158,7 @@ export default function AdminComandaNoua() {
     const lines = liniiCos.map(l => ({
       productId: l.productId, cantitate: l.cantitate, unitateSel: l.unitateSel,
       uom_id: (l.produs.product_uom || []).find(u => u.uom_code === l.unitateSel)?.uom_id,
-      pretUnitar: Math.round(l.pretUnitar * 100) / 100,
+      pretUnitar: Math.round(l.pretUnitar * getUomCoeficient(l.produs, l.unitateSel) * 100) / 100,
       total: Math.round(l.totalBrutLinie * 100) / 100,
     }))
 
@@ -238,9 +249,12 @@ export default function AdminComandaNoua() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {filteredProduse.map(product => {
                   const inCart = cart[product.id]
-                  const currentUom = inCart?.unitateSel || getFirstUom(product)
+                  const allOrderable = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
+                  // Blocăm pe unitatea atribuită clientului dacă produsul o suportă
+                  const lockedUom = assignedUom && allOrderable.some(u => u.uom_code === assignedUom) ? assignedUom : null
+                  const currentUom = lockedUom || inCart?.unitateSel || getFirstUom(product)
                   const pretUom = getPretPerUom(product, currentUom)
-                  const uoms = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
+                  const uoms = lockedUom ? allOrderable.filter(u => u.uom_code === lockedUom) : allOrderable
 
                   return (
                     <div key={product.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
