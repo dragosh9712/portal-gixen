@@ -127,7 +127,7 @@ export default function ComandaNoua() {
       const pretClient = getPretPentruClient(productId, clientId)
       return { productId, cantitate, unitateSel, cantRole, produs, totalBrutLinie: pretClient * cantRole, pretUnitar: pretClient }
     }).filter(Boolean)
-  }, [cart, produse, user.firmId])
+  }, [cart, produse, clientId])
 
   // Bug 14: auto-detectare transport din cantitate
   const autoTransportType = useMemo(() => detectTransportType(liniiCos, produse), [liniiCos])
@@ -155,7 +155,7 @@ export default function ComandaNoua() {
   }
 
   function getPretPerUom(product, uomCode) {
-    const pretRola = getPretPentruClient(product.id, user.firmId)
+    const pretRola = getPretPentruClient(product.id, clientId)
     const coef = getUomCoeficient(product, uomCode)
     return Math.round(pretRola * coef * 100) / 100
   }
@@ -414,7 +414,7 @@ export default function ComandaNoua() {
                   ⚠ {creditWarning.message}
                   {creditWarning.block && (
                     <div style={{ marginTop: 4, fontWeight: 600 }}>
-                      La plasare, se va genera automat o proformă pentru diferența de {lei(creditWarning.orderTotal - (db.credit_limits?.find(c => c.firm_id === user.firmId)?.available_credit || 0))} și comanda va fi în așteptarea plății.
+                      La plasare, se va genera automat o proformă pentru diferența de {lei(creditWarning.orderTotal - (db.credit_limits?.find(c => c.firm_id === clientId)?.available_credit || 0))} și comanda va fi în așteptarea plății.
                     </div>
                   )}
                 </div>
