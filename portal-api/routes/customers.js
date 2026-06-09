@@ -56,18 +56,46 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const fields = []
     const params = { id: req.params.id }
 
-    if (c.name !== undefined)     { fields.push('name = @name');           params.name = c.name }
-    if (c.cui !== undefined)      { fields.push('cui = @cui');              params.cui = c.cui }
-    if (c.status !== undefined)   { fields.push('status = @status');       params.status = c.status }
-    if (c.currency !== undefined) { fields.push('currency = @currency');   params.currency = c.currency }
-    if (c.customer_group !== undefined) { fields.push('customer_group = @cg'); params.cg = c.customer_group }
-    if (c.agent_id !== undefined) { fields.push('agent_id = @agentId');    params.agentId = c.agent_id }
-    if (c.address !== undefined)  { fields.push('address = @address');     params.address = c.address }
-    if (c.phone !== undefined)    { fields.push('phone = @phone');         params.phone = c.phone }
-    if (c.email !== undefined)    { fields.push('email = @email');         params.email = c.email }
+    if (c.name !== undefined)       { fields.push('name = @name');                   params.name = c.name }
+    if (c.status !== undefined)     { fields.push('status = @status');               params.status = c.status }
+    if (c.currency !== undefined)   { fields.push('currency = @currency');           params.currency = c.currency }
+    if (c.customer_group !== undefined) { fields.push('customer_group = @cg');       params.cg = c.customer_group }
+    if (c.agent_id !== undefined)   { fields.push('agent_id = @agentId');            params.agentId = c.agent_id }
+
+    const taxId = c.tax_id ?? c.cui
+    if (taxId !== undefined)        { fields.push('tax_id = @taxId');                params.taxId = taxId }
+
+    const regCom = c.trade_register_no ?? c.regCom
+    if (regCom !== undefined)       { fields.push('trade_register_no = @regCom');    params.regCom = regCom }
+
+    const phone = c.phone ?? c.telefon
+    if (phone !== undefined)        { fields.push('phone = @phone');                 params.phone = phone }
+
+    const address = c.address ?? c.adresa
+    if (address !== undefined)      { fields.push('address = @address');             params.address = address }
+
+    if (c.email !== undefined)      { fields.push('email = @email');                 params.email = c.email }
+    if (c.locality !== undefined)   { fields.push('locality = @locality');           params.locality = c.locality }
+    if (c.county !== undefined)     { fields.push('county = @county');               params.county = c.county }
+
+    if (c.global_discount !== undefined) { fields.push('global_discount = @gd');    params.gd = parseFloat(c.global_discount) || 0 }
+    if (c.platitor_tva !== undefined)    { fields.push('platitor_tva = @ptva');      params.ptva = c.platitor_tva ? 1 : 0 }
+    if (c.default_transport_type !== undefined) { fields.push('default_transport_type = @dtt'); params.dtt = c.default_transport_type }
+
+    const marci = c.allowed_brands ?? c.marciPermise
+    if (marci !== undefined) {
+      const marciStr = Array.isArray(marci) ? JSON.stringify(marci) : marci
+      fields.push('allowed_brands = @marci')
+      params.marci = marciStr
+    }
 
     if (fields.length > 0) {
       await query(`UPDATE customers SET ${fields.join(', ')} WHERE id = @id`, params)
+    }
+
+    // Keep users.email in sync when customer email changes
+    if (c.email !== undefined) {
+      await query('UPDATE users SET email = @email WHERE customer_id = @id AND delegate_type = \'primary\'', { email: c.email, id: req.params.id })
     }
 
     if (c.status) {

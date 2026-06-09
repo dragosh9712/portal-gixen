@@ -33,8 +33,9 @@ async function req(method, path, body = null, isFormData = false) {
 
 const api = {
   auth: {
-    login:  (email, password) => req('POST', '/api/auth/login', { email, password }),
-    me:     ()                 => req('GET',  '/api/auth/me'),
+    login:    (email, password) => req('POST', '/api/auth/login', { email, password }),
+    register: data              => req('POST', '/api/auth/register', data),
+    me:       ()                => req('GET',  '/api/auth/me'),
     changePassword: (currentPassword, newPassword) => req('PUT', '/api/auth/change-password', { currentPassword, newPassword }),
     resetPassword: (userId, newPassword) => req('PUT', `/api/auth/reset-password/${userId}`, { newPassword }),
   },

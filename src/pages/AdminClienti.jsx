@@ -69,8 +69,8 @@ export default function AdminClienti() {
   function handleReject(firmId) { rejectFirm(firmId); showToast('Client respins.', 'error'); setSelected(null) }
 
   function toggleMarca(marca) {
-    const prev = editForm.marciPermise || []
-    setEditForm({ ...editForm, marciPermise: prev.includes(marca) ? prev.filter(m => m !== marca) : [...prev, marca] })
+    const prev = editForm.allowed_brands ? (Array.isArray(editForm.allowed_brands) ? editForm.allowed_brands : JSON.parse(editForm.allowed_brands || '[]')) : []
+    setEditForm({ ...editForm, allowed_brands: prev.includes(marca) ? prev.filter(m => m !== marca) : [...prev, marca] })
   }
 
   function handleAddDelegate() {
@@ -231,7 +231,7 @@ export default function AdminClienti() {
               {tab === 'info' && (
                 <div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                    {[['Denumire', 'name'], ['CUI', 'cui'], ['Reg. Com.', 'regCom'], ['Email', 'email'], ['Telefon', 'telefon'], ['IBAN', 'iban'], ['Bancă', 'banca'], ['Site web', 'site_web']].map(([label, key]) => (
+                    {[['Denumire', 'name'], ['CUI', 'tax_id'], ['Reg. Com.', 'trade_register_no'], ['Email', 'email'], ['Telefon', 'phone'], ['IBAN', 'iban'], ['Bancă', 'banca'], ['Site web', 'site_web']].map(([label, key]) => (
                       <div key={key} className="form-group" style={{ marginBottom: 0 }}>
                         <label>{label}</label>
                         <input className="w-full" value={editForm[key] || ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))} />
@@ -282,12 +282,15 @@ export default function AdminClienti() {
                   <div className="form-group">
                     <label>Mărci permise</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                      {allMarci.map(m => (
-                        <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, padding: '3px 10px', borderRadius: 20, background: (editForm.marciPermise || []).includes(m) ? 'var(--blue-bg)' : 'var(--bg3)', border: '1px solid ' + ((editForm.marciPermise || []).includes(m) ? 'var(--blue)' : 'var(--border)'), color: (editForm.marciPermise || []).includes(m) ? 'var(--blue-text)' : 'var(--text2)' }}>
-                          <input type="checkbox" checked={(editForm.marciPermise || []).includes(m)} onChange={() => toggleMarca(m)} style={{ width: 12, height: 12 }} />
+                      {allMarci.map(m => {
+                        const selMarci = editForm.allowed_brands ? (Array.isArray(editForm.allowed_brands) ? editForm.allowed_brands : JSON.parse(editForm.allowed_brands || '[]')) : []
+                        return (
+                        <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, padding: '3px 10px', borderRadius: 20, background: selMarci.includes(m) ? 'var(--blue-bg)' : 'var(--bg3)', border: '1px solid ' + (selMarci.includes(m) ? 'var(--blue)' : 'var(--border)'), color: selMarci.includes(m) ? 'var(--blue-text)' : 'var(--text2)' }}>
+                          <input type="checkbox" checked={selMarci.includes(m)} onChange={() => toggleMarca(m)} style={{ width: 12, height: 12 }} />
                           {m}
                         </label>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

@@ -63,7 +63,7 @@ export default function Onboarding() {
     name: '', cui: '', regCom: '', adresa: '', localitate: '', judet: '',
     contactNume: '', contactPrenume: '', contactEmail: '', contactTelefon: '',
     password: '', passwordConfirm: '',
-    iban: '', banca: '', default_transport_type: 'Van', adresaLivrare: '', programLivrare: '',
+    iban: '', banca: '', adresaLivrare: '', programLivrare: '',
     emailDocumente: '',
   })
 
@@ -241,12 +241,7 @@ export default function Onboarding() {
       </div>
       <FormField id="emailDocumente" label="Email primire facturi/documente" type="email" placeholder="facturi@firma.ro" value={form.emailDocumente} onChange={handleChange} error={errors.emailDocumente} />
       <FormField id="adresaLivrare" label="Adresă livrare" type="textarea" placeholder="Adresa punctului de livrare (dacă diferă de sediu)" value={form.adresaLivrare} onChange={handleChange} error={errors.adresaLivrare} />
-      <div className="form-row">
-        <FormField id="programLivrare" label="Program livrare" placeholder="Luni-Vineri 09:00-17:00" value={form.programLivrare} onChange={handleChange} error={errors.programLivrare} />
-        <FormField id="default_transport_type" label="Transport preferat" type="select"
-          options={[{ value: 'Van', label: 'Duba (Van)' }, { value: 'Truck', label: 'TIR (Camion)' }]}
-          value={form.default_transport_type} onChange={handleChange} error={errors.default_transport_type} />
-      </div>
+      <FormField id="programLivrare" label="Program livrare" placeholder="Luni-Vineri 09:00-17:00" value={form.programLivrare} onChange={handleChange} error={errors.programLivrare} />
     </div>,
 
     // Step 3: Confirmare

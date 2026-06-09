@@ -198,12 +198,18 @@ export function StoreProvider({ children }) {
   }
 
   async function registerNewClient(firmData, userData) {
-    const result = await api.customers.create({
-      name: firmData.name, cui: firmData.cui, regCom: firmData.regCom,
-      adresa: `${firmData.adresa}, ${firmData.localitate}, ${firmData.judet}`,
-      telefon: firmData.contactTelefon, email: firmData.contactEmail,
-      contact_name: `${userData.contactNume} ${userData.contactPrenume}`,
-      contact_email: userData.email, password: userData.password,
+    const result = await api.auth.register({
+      numeFirma: firmData.name,
+      cui: firmData.cui,
+      regCom: firmData.regCom,
+      adresa: firmData.adresa,
+      localitate: firmData.localitate,
+      judet: firmData.judet,
+      contactNume: firmData.contactNume || userData.contactNume,
+      contactPrenume: firmData.contactPrenume || userData.contactPrenume,
+      contactEmail: firmData.contactEmail || userData.email,
+      contactTelefon: firmData.contactTelefon,
+      password: userData.password,
     })
     await refreshCustomers()
     return result

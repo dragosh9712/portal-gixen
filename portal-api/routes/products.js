@@ -27,15 +27,11 @@ router.get('/', authenticateToken, async (req, res) => {
           const brandsRaw = client.allowed_brands || client.brand_propriu
           const brands = brandsRaw ? JSON.parse(brandsRaw) : []
           if (brands.length > 0) {
-            const brandsPlaceholders = brands.map((_, i) => `@br${i}`).join(',')
+            const ph = brands.map((_, i) => `@br${i}`).join(',')
             brands.forEach((b, i) => { params[`br${i}`] = b })
-            if (client.vede_gixen) {
-              where += ` AND (p.marca = 'Gixen' OR p.brand IN (${brandsPlaceholders}))`
-            } else {
-              where += ` AND (p.marca = 'Gixen' OR p.brand IN (${brandsPlaceholders}))`
-            }
+            where += ` AND (p.marca IN (${ph}) OR p.brand IN (${ph}))`
           }
-          // If no brand restriction, client sees all active Gixen products — no extra filter
+          // If allowed_brands is empty → client sees all active products (no restriction)
         }
       } catch { /* if query fails, show all active products */ }
     }
