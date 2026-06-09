@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const { query, sql } = require('../db')
 const { authenticateToken, requireAdmin } = require('../middleware/auth')
+const emailSvc = require('../emailService')
 
 const TVA = 0.21
 
@@ -153,6 +154,18 @@ router.post('/', authenticateToken, async (req, res) => {
     await query(`UPDATE orders SET net_total=@net, tva_total=@tva, gross_total=@gross WHERE id=@id`,
       { id, net: Math.round(netTotal * 100) / 100, tva: tvaTotal, gross: grossTotal })
 
+    // Send confirmation email to customer
+    const custResult = await query(
+      'SELECT u.email FROM users u WHERE u.customer_id = @cid AND u.delegate_type = \'primary\' AND u.status != \'inactive\'',
+      { cid: o.customer_id }
+    )
+    if (custResult.recordset[0]?.email) {
+      emailSvc.sendOrderPlaced(custResult.recordset[0].email, {
+        nr, id,
+        totalDisplay: `${grossTotal.toFixed(2)} RON`,
+      }).catch(() => {})
+    }
+
     res.status(201).json({ id, nr, net_total: Math.round(netTotal * 100) / 100, tva_total: tvaTotal, gross_total: grossTotal })
   } catch (err) {
     console.error('POST /orders error:', err.message)
@@ -169,6 +182,19 @@ router.put('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
     if (location_id) { q += `, location_id=@lid`; params.lid = location_id }
     q += ` WHERE id=@id`
     await query(q, params)
+
+    // Send status change email to customer
+    const orderResult = await query(
+      `SELECT o.order_number, u.email
+       FROM orders o
+       JOIN users u ON u.customer_id = o.customer_id AND u.delegate_type = 'primary' AND u.status != 'inactive'
+       WHERE o.id = @id`, { id: req.params.id }
+    )
+    const row = orderResult.recordset[0]
+    if (row?.email) {
+      emailSvc.sendOrderStatusChanged(row.email, { nr: row.order_number, id: req.params.id }, status).catch(() => {})
+    }
+
     res.json({ message: `Status actualizat: ${status}` })
   } catch (err) {
     res.status(500).json({ error: err.message })
