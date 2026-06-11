@@ -1,0 +1,33 @@
+DEPLOY PORTAL GIXEN — pași pe server (Windows)
+================================================
+
+1. EXTRAGE zip-ul DIRECT în folderul proiectului (acolo unde e server.js),
+   cu suprascriere (overwrite ALL). Structura din zip respectă structura proiectului:
+     dist\                <- frontend nou (pentru server.js din rădăcină)
+     portal-api\dist\     <- frontend nou (pentru portal-api\server.js)
+     portal-api\routes\*  <- API actualizat
+     portal-api\server.js, emailService.js, selectsoftService.js
+
+2. VERIFICĂ în portal-api\.env că ai:
+     SELECTSOFT_URL=http://localhost:6081
+     SELECTSOFT_TOKEN=<tokenul tau>
+
+3. RESTART obligatoriu la procesul Node:
+     pm2 restart all        (sau cum e pornit serviciul)
+   Daca nu stii cum e pornit:  pm2 list   sau   tasklist | findstr node
+
+4. VERIFICARE ca a mers (in browser sau curl pe server):
+   a) http://localhost/api/health        -> {"status":"ok","db":"connected"}
+   b) Deschide portalul, apasa CTRL+F5 (hard refresh, golire cache!)
+      - Pe login trebuie sa apara bifa "Tine-ma minte"
+   c) View Source pe pagina -> fisierul JS trebuie sa fie index-ZuG69nM0.js
+      Daca vezi alt nume, inca se serveste build-ul vechi -> dist-ul nu a ajuns
+      in folderul corect sau nu ai dat restart.
+   d) Logat ca admin: http://localhost/api/selectsoft/test (din browser dupa login,
+      sau cu curl + token) -> {"ok":true,...}
+
+PROBLEME FRECVENTE:
+- Browserul tine cache: intotdeauna CTRL+F5 dupa deploy.
+- Fisierele copiate in alt folder decat cel din care ruleaza Node.
+  Verifica cu: pm2 describe <nume>  -> uita-te la "exec cwd" / "script path".
+- Restart nefacut: Node NU reincarca fisierele singur.
