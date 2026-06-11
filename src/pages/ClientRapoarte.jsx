@@ -25,7 +25,7 @@ export default function ClientRapoarte() {
   const { user } = useAuth()
   const { db } = useStore()
   const navigate = useNavigate()
-  const firmId = user.firmId
+  const firmId = user.customerId || user.firmId
 
   const myOrders = db.orders.filter(o => o.firmId === firmId)
 

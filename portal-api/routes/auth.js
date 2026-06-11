@@ -4,6 +4,7 @@ const crypto  = require('crypto')
 const { query } = require('../db')
 const { generateToken, authenticateToken, requireAdmin } = require('../middleware/auth')
 const email   = require('../emailService')
+const { logEmail } = require('./customers')
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -113,7 +114,9 @@ router.post('/register', async (req, res) => {
       { id: userId, email: contactEmail, hash, name, cid: firmId }
     )
 
-    email.sendOnboardingPending(contactEmail, numeFirma).catch(() => {})
+    email.sendOnboardingPending(contactEmail, numeFirma)
+      .then(() => logEmail(firmId, contactEmail, 'onboarding_pending'))
+      .catch(() => {})
     res.status(201).json({ message: 'Cont creat cu succes. Așteptați aprobarea.' })
   } catch (err) {
     console.error('Register error:', err.message)

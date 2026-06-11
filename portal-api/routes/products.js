@@ -36,7 +36,7 @@ router.get('/', authenticateToken, async (req, res) => {
     if (req.user.role === 'client' && req.user.customerId) {
       try {
         const clientResult = await query(
-          'SELECT vizibilitate_produse, private_brand_firm_id FROM customers WHERE id = @cid',
+          'SELECT vizibilitate_produse FROM customers WHERE id = @cid',
           { cid: req.user.customerId }
         )
         const client = clientResult.recordset[0]
@@ -46,13 +46,13 @@ router.get('/', authenticateToken, async (req, res) => {
           // Doar produsele proprii ale firmei
           where += ' AND p.private_brand_firm_id = @clientFirmId'
         } else {
-          // gixen_si_proprii (default): produse publice + produsele proprii.
-          // Produsele private ale altor firme NU sunt vizibile niciodată.
+          // gixen_si_proprii: produse publice fără proprietar (ale Gixen) + propriile produse
+          // Produsele private/publice ale ALTOR firme nu sunt vizibile
           where += ` AND (
             p.private_brand_firm_id = @clientFirmId
             OR (
               (p.vizibilitate IS NULL OR p.vizibilitate LIKE 'public%')
-              AND (p.private_brand_firm_id IS NULL OR p.private_brand_firm_id = '' OR p.private_brand_firm_id = @clientFirmId)
+              AND (p.private_brand_firm_id IS NULL OR p.private_brand_firm_id = '')
             )
           )`
         }

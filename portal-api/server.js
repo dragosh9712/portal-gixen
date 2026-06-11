@@ -55,8 +55,57 @@ app.get('*', (req, res) => {
 
 
 
+// Auto-refresh curs valutar zilnic la 00:05 ora României
+async function refreshExchangeRate() {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15000)
+    let xml
+    try {
+      const resp = await fetch('https://www.bnr.ro/nbrfxrates.xml', { signal: controller.signal })
+      if (!resp.ok) { console.error('BNR exchange refresh: HTTP', resp.status); return }
+      xml = await resp.text()
+    } finally { clearTimeout(timer) }
+    const match = xml.match(/<Rate currency="EUR"[^>]*>([^<]+)</)
+    if (!match) { console.error('BNR exchange refresh: EUR not found'); return }
+    const bnrRate = parseFloat(match[1].trim())
+    if (isNaN(bnrRate) || bnrRate <= 0) return
+    const margin  = parseFloat(process.env.BNR_MARGIN_PCT) || 0.5
+    const applied = Math.round(bnrRate * (1 + margin / 100) * 10000) / 10000
+    const db = require('./db')
+    const pool = await db.getPool()
+    const { sql } = db
+    const r = pool.request()
+    r.input('bnr',     sql.Decimal(10, 4), bnrRate)
+    r.input('margin',  sql.Decimal(10, 4), margin)
+    r.input('applied', sql.Decimal(10, 4), applied)
+    await r.query(`
+      IF EXISTS (SELECT 1 FROM exchange_rates WHERE currency='EUR')
+        UPDATE exchange_rates SET bnr_rate=@bnr, margin_percent=@margin, applied_rate=@applied, updated_at=SYSDATETIME() WHERE currency='EUR'
+      ELSE
+        INSERT INTO exchange_rates (currency, bnr_rate, margin_percent, applied_rate) VALUES ('EUR', @bnr, @margin, @applied)`)
+    console.log(`[exchange] refreshed EUR = ${applied} (BNR: ${bnrRate})`)
+  } catch (err) { console.error('BNR exchange refresh error:', err.message) }
+}
+
+function scheduleMidnightRefresh() {
+  // Calculează ms până la 00:05 ora României
+  const now = new Date()
+  const roNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }))
+  const target = new Date(roNow)
+  target.setHours(0, 5, 0, 0)
+  if (target <= roNow) target.setDate(target.getDate() + 1)
+  const delay = target - roNow
+  console.log(`[exchange] next auto-refresh in ${Math.round(delay / 60000)} min (00:05 Romania)`)
+  setTimeout(() => {
+    refreshExchangeRate()
+    setInterval(refreshExchangeRate, 24 * 60 * 60 * 1000)
+  }, delay)
+}
+
 app.listen(PORT, () => {
   console.log(`\n Gixen Portal API running on port ${PORT}`)
   console.log(`   Health: http://localhost:${PORT}/api/health`)
   console.log(`   Env: ${process.env.NODE_ENV || 'development'}\n`)
+  scheduleMidnightRefresh()
 })

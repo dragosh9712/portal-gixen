@@ -4,6 +4,45 @@ const { query } = require('../db')
 const { authenticateToken, requireAdmin } = require('../middleware/auth')
 const emailSvc = require('../emailService')
 
+// Email log — tracking toate mail-urile trimise
+let emailLogEnsured = false
+async function ensureEmailLog() {
+  if (emailLogEnsured) return
+  try {
+    await query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='email_log')
+      CREATE TABLE email_log (
+        id           VARCHAR(64) PRIMARY KEY,
+        customer_id  VARCHAR(64),
+        recipient    NVARCHAR(255),
+        type         VARCHAR(64),
+        sent_at      DATETIME2 DEFAULT SYSDATETIME()
+      )`)
+    emailLogEnsured = true
+  } catch (e) { console.error('ensureEmailLog:', e.message) }
+}
+
+async function logEmail(customerId, recipient, type) {
+  try {
+    await ensureEmailLog()
+    await query(
+      'INSERT INTO email_log (id, customer_id, recipient, type) VALUES (@id, @cid, @rec, @type)',
+      { id: 'ml_' + Date.now(), cid: customerId || null, rec: recipient, type }
+    )
+  } catch (e) { console.error('logEmail:', e.message) }
+}
+
+async function wasEmailSent(customerId, type) {
+  try {
+    await ensureEmailLog()
+    const r = await query(
+      'SELECT TOP 1 id FROM email_log WHERE customer_id = @cid AND type = @type',
+      { cid: customerId, type }
+    )
+    return r.recordset.length > 0
+  } catch { return false }
+}
+
 // Asigură coloanele de vizibilitate produse (o singură dată per proces)
 let visColsEnsured = false
 async function ensureVisibilityColumns() {
@@ -126,9 +165,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const cust = custResult.recordset[0]
       if (cust) {
         if (c.status === 'activ') {
-          emailSvc.sendOnboardingApproved(cust.email, cust.name).catch(() => {})
+          // Trimite email de aprobare doar o singură dată per client
+          wasEmailSent(req.params.id, 'onboarding_approved').then(alreadySent => {
+            if (!alreadySent) {
+              emailSvc.sendOnboardingApproved(cust.email, cust.name)
+                .then(() => logEmail(req.params.id, cust.email, 'onboarding_approved'))
+                .catch(() => {})
+            }
+          })
         } else if (c.status === 'respinsa') {
-          emailSvc.sendOnboardingRejected(cust.email, cust.name, c.rejection_reason || '').catch(() => {})
+          emailSvc.sendOnboardingRejected(cust.email, cust.name, c.rejection_reason || '')
+            .then(() => logEmail(req.params.id, cust.email, 'onboarding_rejected'))
+            .catch(() => {})
         }
       }
     }
@@ -266,4 +314,30 @@ router.get('/:id/delegates', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// GET /api/customers/:id/emails — istoric email-uri per client
+router.get('/:id/emails', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await ensureEmailLog()
+    const result = await query(
+      'SELECT * FROM email_log WHERE customer_id = @id ORDER BY sent_at DESC',
+      { id: req.params.id }
+    )
+    res.json(result.recordset)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// GET /api/customers/email-log/all — toate email-urile (admin global)
+router.get('/email-log/all', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await ensureEmailLog()
+    const result = await query(
+      `SELECT el.*, c.name AS firm_name FROM email_log el
+       LEFT JOIN customers c ON el.customer_id = c.id
+       ORDER BY el.sent_at DESC`
+    )
+    res.json(result.recordset)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 module.exports = router
+module.exports.logEmail = logEmail
