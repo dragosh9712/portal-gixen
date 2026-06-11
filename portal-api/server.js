@@ -108,4 +108,11 @@ app.listen(PORT, () => {
   console.log(`   Health: http://localhost:${PORT}/api/health`)
   console.log(`   Env: ${process.env.NODE_ENV || 'development'}\n`)
   scheduleMidnightRefresh()
+
+  // Monitor plăți proforme Selectsoft — la fiecare 15 minute
+  const { monitorPendingPayments } = require('./routes/orders')
+  setTimeout(() => {
+    monitorPendingPayments()
+    setInterval(monitorPendingPayments, 15 * 60 * 1000)
+  }, 60 * 1000)
 })

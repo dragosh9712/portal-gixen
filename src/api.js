@@ -89,6 +89,9 @@ const api = {
     create:    data            => req('POST', '/api/orders', data),
     setStatus: (id, status, locationId) => req('PUT', `/api/orders/${id}/status`, { status, location_id: locationId }),
     addNote:   (id, text)      => req('POST', `/api/orders/${id}/notes`, { text }),
+    checkPayment: id           => req('POST', `/api/orders/${id}/check-payment`),
+    proforma:  id              => req('GET',  `/api/orders/${id}/proforma`),
+    pushSS:    (id, proforma)  => req('POST', `/api/orders/${id}/push-selectsoft`, { proforma }),
   },
   agents: {
     list:   ()                 => req('GET',  '/api/agents'),

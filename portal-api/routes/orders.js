@@ -5,6 +5,159 @@ const emailSvc = require('../emailService')
 
 const TVA = 0.21
 
+// Coloane pentru fluxul de proformă / plată (o singură dată per proces)
+let payColsEnsured = false
+async function ensurePaymentColumns() {
+  if (payColsEnsured) return
+  try {
+    await query(`IF COL_LENGTH('orders','proforma_nr_intern') IS NULL ALTER TABLE orders ADD proforma_nr_intern VARCHAR(64) NULL`)
+    await query(`IF COL_LENGTH('orders','payment_status') IS NULL ALTER TABLE orders ADD payment_status VARCHAR(32) NULL`)
+    await query(`IF COL_LENGTH('orders','payment_confirmed_at') IS NULL ALTER TABLE orders ADD payment_confirmed_at DATETIME2 NULL`)
+    await query(`IF COL_LENGTH('orders','ss_nr_intern') IS NULL ALTER TABLE orders ADD ss_nr_intern VARCHAR(64) NULL`)
+    payColsEnsured = true
+  } catch (e) { console.error('ensurePaymentColumns:', e.message) }
+}
+
+// ── Push comandă/proformă în Selectsoft ──────────────────────────────────────
+// Liniile sunt trimise cu prețurile NETE finale (după discounturi pe linie +
+// discount global distribuit proporțional), cu TVA inclus per cerința SS.
+async function buildSsPayload(orderId, { proforma = false } = {}) {
+  const ordRes = await query('SELECT * FROM orders WHERE id = @id', { id: orderId })
+  const o = ordRes.recordset[0]
+  if (!o) throw new Error('Comandă inexistentă')
+  const custRes = await query('SELECT * FROM customers WHERE id = @id', { id: o.customer_id })
+  const cust = custRes.recordset[0]
+  if (!cust) throw new Error('Client inexistent')
+
+  const linesRes = await query(`
+    SELECT ol.*, p.name AS product_name, p.selectsoft_cod, p.code
+    FROM order_lines ol JOIN products p ON ol.product_id = p.id
+    WHERE ol.order_id = @id ORDER BY ol.line_number`, { id: orderId })
+  const lines = linesRes.recordset
+
+  // Discount global distribuit proporțional pe linii
+  const netBrut = lines.reduce((s, l) => s + (parseFloat(l.line_total) || 0), 0)
+  const totalDiscount = parseFloat(o.total_discount) || 0
+  const discountFactor = netBrut > 0 ? Math.max(0, (netBrut - totalDiscount) / netBrut) : 1
+
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const ssLines = lines.map(l => {
+    // Preț per unitatea de bază (rolă) — SS lucrează pe unitatea produsului
+    const qtyRolls = parseFloat(l.quantity_in_rolls) || parseFloat(l.quantity) || 0
+    const lineNet = (parseFloat(l.line_total) || 0) * discountFactor
+    const prixUnitNet = qtyRolls > 0 ? lineNet / qtyRolls : 0
+    return {
+      cod_intern: l.selectsoft_cod || l.code || l.product_id,
+      denumire: l.product_name || l.product_id,
+      cantitate: String(qtyRolls),
+      pret_vanzare: String(Math.round(prixUnitNet * (1 + TVA) * 100) / 100),
+      k_tva: '21',
+    }
+  })
+
+  const netFinal = Math.round(netBrut * discountFactor * 100) / 100
+  const tvaFinal = Math.round(netFinal * TVA * 100) / 100
+
+  return {
+    comanda: {
+      nr_comanda: o.order_number,
+      data_comanda: today,
+      tip_plata: o.payment_type === 'OP' ? 'OP' : 'CRD',
+      sursa: 'PORTAL_GIXEN',
+      valoare_comanda: Math.round((netFinal + tvaFinal) * 100) / 100,
+      val_tva: tvaFinal,
+      observatii: proforma
+        ? `PROFORMA portal B2B #${o.order_number} — comandă blocată de limita de credit, în așteptarea plății`
+        : `Comandă portal B2B #${o.order_number}`,
+      preturiCuTva: true,
+      produse: ssLines,
+    },
+    client: {
+      date_firma: {
+        denumire: cust.name,
+        cod_fiscal: cust.tax_id || '',
+        tara: 'RO',
+        judet: cust.county || '',
+        localitate: cust.locality || '',
+        adresa: cust.address || '',
+        email: cust.email || '',
+      },
+      date_contact: { nume: cust.name, email: cust.email || '', telefon: cust.phone || '' },
+    },
+  }
+}
+
+async function pushOrderToSelectsoft(orderId, { proforma = false } = {}) {
+  const ss = require('../selectsoftService')
+  if (!ss.isConfigured()) return null
+  const payload = await buildSsPayload(orderId, { proforma })
+  const result = await ss.insertComanda(payload)
+  const nrIntern = result?.nr_intern || result?.result?.nr_intern || null
+  if (nrIntern) {
+    await ensurePaymentColumns()
+    const col = proforma ? 'proforma_nr_intern' : 'ss_nr_intern'
+    await query(`UPDATE orders SET ${col} = @nr WHERE id = @id`, { id: orderId, nr: String(nrIntern) })
+  }
+  return nrIntern
+}
+
+// ── Verificare plată proformă în Selectsoft ──────────────────────────────────
+// Comanda e considerată plătită când documentul nu mai apare în restanțe.
+async function checkProformaPayment(orderId) {
+  const ss = require('../selectsoftService')
+  if (!ss.isConfigured()) return { checked: false, reason: 'Selectsoft neconfigurat' }
+  await ensurePaymentColumns()
+
+  const ordRes = await query(`
+    SELECT o.*, c.tax_id FROM orders o
+    JOIN customers c ON o.customer_id = c.id
+    WHERE o.id = @id`, { id: orderId })
+  const o = ordRes.recordset[0]
+  if (!o) return { checked: false, reason: 'Comandă inexistentă' }
+  if (!o.proforma_nr_intern) return { checked: false, reason: 'Comanda nu are proformă generată' }
+  if (o.payment_status === 'platit') return { checked: true, paid: true }
+
+  const rest = await ss.getRestante({ cod_fiscal: o.tax_id || '' })
+  const restDocs = rest?.result || rest?.documente || rest?.data || []
+  const stillUnpaid = Array.isArray(restDocs) && restDocs.some(d =>
+    String(d.nr_intern) === String(o.proforma_nr_intern)
+  )
+
+  if (!stillUnpaid) {
+    await query(`
+      UPDATE orders SET payment_status='platit', payment_confirmed_at=SYSDATETIME(),
+        status = CASE WHEN status='asteptare_plata' THEN 'in_aprobare' ELSE status END
+      WHERE id = @id`, { id: orderId })
+    // Notifică clientul + trimite comanda reală în SS acum că e plătită
+    pushOrderToSelectsoft(orderId).catch(e => console.error('[SS push after payment]', e.message))
+    const userRes = await query(
+      `SELECT u.email FROM users u WHERE u.customer_id=@cid AND u.delegate_type='primary' AND u.status != 'inactive'`,
+      { cid: o.customer_id })
+    if (userRes.recordset[0]?.email) {
+      emailSvc.sendOrderStatusChanged(userRes.recordset[0].email,
+        { nr: o.order_number, id: orderId }, 'in_aprobare').catch(() => {})
+    }
+    return { checked: true, paid: true, justConfirmed: true }
+  }
+  return { checked: true, paid: false }
+}
+
+// Monitor periodic — verifică toate comenzile în așteptarea plății
+async function monitorPendingPayments() {
+  try {
+    await ensurePaymentColumns()
+    const res = await query(`
+      SELECT id FROM orders
+      WHERE payment_status = 'asteptare_plata' AND proforma_nr_intern IS NOT NULL`)
+    for (const row of res.recordset) {
+      try {
+        const r = await checkProformaPayment(row.id)
+        if (r.justConfirmed) console.log(`[payments] Comanda ${row.id}: plată confirmată în SS`)
+      } catch (e) { console.error(`[payments] check ${row.id}:`, e.message) }
+    }
+  } catch (e) { console.error('[payments] monitor:', e.message) }
+}
+
 function normalizeOrder(o) {
   const lines = o.lines_json ? JSON.parse(o.lines_json) : []
   const noteInterne = o.internal_notes_json ? JSON.parse(o.internal_notes_json) : []
@@ -33,6 +186,10 @@ function normalizeOrder(o) {
     tvaTotal:       o.tva_total || 0,
     paymentType:    o.payment_type || 'OP',
     transportType:  o.transport_type || 'Van',
+    paymentStatus:  o.payment_status || null,
+    proformaNr:     o.proforma_nr_intern || null,
+    ssNrIntern:     o.ss_nr_intern || null,
+    paymentConfirmedAt: o.payment_confirmed_at || null,
     lines:          lines.map(l => ({
       ...l,
       productId:    l.product_id,
@@ -55,6 +212,7 @@ function normalizeOrder(o) {
 // GET /api/orders
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    await ensurePaymentColumns()
     const isAdmin = req.user.role === 'admin'
     let where = isAdmin ? 'WHERE 1=1' : 'WHERE o.customer_id = @cid'
     const params = isAdmin ? {} : { cid: req.user.customerId }
@@ -89,18 +247,21 @@ router.get('/', authenticateToken, async (req, res) => {
 // POST /api/orders
 router.post('/', authenticateToken, async (req, res) => {
   try {
+    await ensurePaymentColumns()
     const o = req.body
     const id = 'o_' + Date.now()
     const nr = 'GX-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000) + 1000)
+    const requiresProforma = !!o.requires_proforma
+    const initialStatus = requiresProforma ? 'asteptare_plata' : 'plasata'
 
     await query(`
       INSERT INTO orders (id, order_number, customer_id, user_id, agent_id, location_id,
         delivery_location_id, status, order_date, payment_type, transport_type,
         observations, currency, applied_exchange_rate, tva_rate,
-        net_total, tva_total, gross_total, total_discount, delivery_address)
+        net_total, tva_total, gross_total, total_discount, delivery_address, payment_status)
       VALUES (@id, @nr, @cid, @uid, @aid, @lid, @dlid,
-        'plasata', CAST(SYSDATETIME() AS DATE), @pay, @transport,
-        @obs, @currency, @exrate, 21.00, 0, 0, 0, 0, @addr)`, {
+        '${initialStatus}', CAST(SYSDATETIME() AS DATE), @pay, @transport,
+        @obs, @currency, @exrate, 21.00, 0, 0, 0, 0, @addr, ${requiresProforma ? "'asteptare_plata'" : 'NULL'})`, {
       id, nr,
       cid:      o.customer_id,
       uid:      req.user.id,
@@ -148,64 +309,25 @@ router.post('/', authenticateToken, async (req, res) => {
       })
     }
 
-    // Update totals
-    const tvaTotal   = Math.round(netTotal * TVA * 100) / 100
-    const grossTotal = Math.round((netTotal + tvaTotal) * 100) / 100
-    await query(`UPDATE orders SET net_total=@net, tva_total=@tva, gross_total=@gross WHERE id=@id`,
-      { id, net: Math.round(netTotal * 100) / 100, tva: tvaTotal, gross: grossTotal })
+    // Discounturi pe linii (din promoEngine) — salvate ca JSON + total
+    const discountLines = o.discount_lines || o.discountLinii || []
+    const totalDiscount = Math.round(discountLines.reduce((s, d) => s + (parseFloat(d.valoare) || 0), 0) * 100) / 100
+    const netFinal = Math.max(0, Math.round((netTotal - totalDiscount) * 100) / 100)
+    const tvaTotal   = Math.round(netFinal * TVA * 100) / 100
+    const grossTotal = Math.round((netFinal + tvaTotal) * 100) / 100
+    await query(`UPDATE orders SET net_total=@net, tva_total=@tva, gross_total=@gross,
+        total_discount=@disc, discount_lines_json=@dlj WHERE id=@id`,
+      { id, net: netFinal, tva: tvaTotal, gross: grossTotal,
+        disc: totalDiscount, dlj: JSON.stringify(discountLines) })
 
-    // Push comandă în Selectsoft (dacă e activat în .env: SELECTSOFT_PUSH_ORDERS=true)
-    if (process.env.SELECTSOFT_PUSH_ORDERS === 'true') {
-      ;(async () => {
-        const ss = require('../selectsoftService')
-        if (!ss.isConfigured()) return
-        const custRes = await query('SELECT * FROM customers WHERE id = @id', { id: o.customer_id })
-        const cust = custRes.recordset[0]
-        if (!cust) return
-        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-        const ssLines = []
-        for (const l of lines) {
-          const pid = l.product_id || l.productId
-          const prodRes = await query('SELECT name, selectsoft_cod, code FROM products WHERE id = @id', { id: pid })
-          const prod = prodRes.recordset[0]
-          ssLines.push({
-            cod_intern: prod?.selectsoft_cod || prod?.code || pid,
-            denumire: prod?.name || pid,
-            cantitate: String(l.cantitate || l.quantity || 0),
-            pret_vanzare: String(Math.round((l.pretUnitar || l.unit_price || 0) * (1 + TVA) * 100) / 100),
-            k_tva: '21',
-          })
-        }
-        const result = await ss.insertComanda({
-          comanda: {
-            nr_comanda: nr,
-            data_comanda: today,
-            tip_plata: o.payment_type === 'OP' ? 'OP' : 'CRD',
-            sursa: 'PORTAL_GIXEN',
-            valoare_comanda: grossTotal,
-            val_tva: tvaTotal,
-            observatii: `Comandă portal B2B #${nr}`,
-            preturiCuTva: true,
-            produse: ssLines,
-          },
-          client: {
-            date_firma: {
-              denumire: cust.name,
-              cod_fiscal: cust.tax_id || '',
-              tara: 'RO',
-              judet: cust.county || '',
-              localitate: cust.locality || '',
-              adresa: cust.address || '',
-              email: cust.email || '',
-            },
-            date_contact: { nume: cust.name, email: cust.email || '', telefon: cust.phone || '' },
-          },
-        })
-        if (result?.nr_intern) {
-          await query('UPDATE orders SET observations = CONCAT(observations, @note) WHERE id = @id',
-            { id, note: ` [SS:${result.nr_intern}]` })
-        }
-      })().catch(e => console.error('[SELECTSOFT push order]', e.message))
+    // Selectsoft: proformă (limită credit depășită) sau comandă normală
+    if (requiresProforma) {
+      pushOrderToSelectsoft(id, { proforma: true })
+        .then(nrIntern => nrIntern && console.log(`[SS] Proformă generată pentru ${nr}: nr_intern=${nrIntern}`))
+        .catch(e => console.error('[SELECTSOFT proforma]', e.message))
+    } else if (process.env.SELECTSOFT_PUSH_ORDERS === 'true') {
+      pushOrderToSelectsoft(id)
+        .catch(e => console.error('[SELECTSOFT push order]', e.message))
     }
 
     // Send confirmation email to customer
@@ -282,6 +404,54 @@ router.post('/:id/notes', authenticateToken, async (req, res) => {
   }
 })
 
+// POST /api/orders/:id/check-payment — verifică în SS dacă proforma a fost achitată
+router.post('/:id/check-payment', authenticateToken, async (req, res) => {
+  try {
+    const result = await checkProformaPayment(req.params.id)
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ checked: false, error: err.message })
+  }
+})
+
+// GET /api/orders/:id/proforma — detalii proformă (incl. liniile din SS dacă există)
+router.get('/:id/proforma', authenticateToken, async (req, res) => {
+  try {
+    await ensurePaymentColumns()
+    const ordRes = await query('SELECT id, order_number, proforma_nr_intern, payment_status, payment_confirmed_at, gross_total FROM orders WHERE id = @id', { id: req.params.id })
+    const o = ordRes.recordset[0]
+    if (!o) return res.status(404).json({ error: 'Comandă inexistentă' })
+    const out = {
+      order_id: o.id,
+      order_number: o.order_number,
+      proforma_nr_intern: o.proforma_nr_intern,
+      payment_status: o.payment_status,
+      payment_confirmed_at: o.payment_confirmed_at,
+      gross_total: o.gross_total,
+      lines: [],
+    }
+    if (o.proforma_nr_intern) {
+      try {
+        const ss = require('../selectsoftService')
+        if (ss.isConfigured()) {
+          const poz = await ss.getPozitiiDocument(o.proforma_nr_intern)
+          out.lines = poz?.result || poz?.pozitii || []
+        }
+      } catch (e) { out.ss_error = e.message }
+    }
+    res.json(out)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/orders/:id/push-selectsoft — retrimite manual comanda în SS (admin)
+router.post('/:id/push-selectsoft', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const nrIntern = await pushOrderToSelectsoft(req.params.id, { proforma: !!req.body.proforma })
+    if (!nrIntern) return res.json({ ok: false, message: 'Selectsoft neconfigurat sau nu a returnat nr_intern' })
+    res.json({ ok: true, nr_intern: nrIntern })
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }) }
+})
+
 // PUT /api/orders/:id/factura
 router.put('/:id/factura', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -295,3 +465,4 @@ router.put('/:id/factura', authenticateToken, requireAdmin, async (req, res) => 
 })
 
 module.exports = router
+module.exports.monitorPendingPayments = monitorPendingPayments

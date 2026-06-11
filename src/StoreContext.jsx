@@ -138,6 +138,8 @@ export function StoreProvider({ children }) {
       observations: observatii || '',
       payment_type: extra?.payment_type || 'OP',
       transport_type: extra?.transport_type || 'Van',
+      requires_proforma: !!extra?.requires_proforma,
+      discount_lines: discountLinii || [],
       total: Math.round((total + discTotal) * 100) / 100,
     })
     await refreshOrders()

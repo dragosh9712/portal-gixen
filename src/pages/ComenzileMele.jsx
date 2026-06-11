@@ -88,6 +88,14 @@ export default function ComenzileMele() {
 
             {/* Status tracker */}
             <StatusTracker status={selected.status} />
+
+            {selected.status === 'asteptare_plata' && (
+              <div style={{ background: 'var(--orange-bg)', borderRadius: 8, padding: '10px 14px', margin: '12px 0', fontSize: 12, color: 'var(--orange-text)' }}>
+                💰 <strong>Comanda așteaptă plata proformei.</strong> Proforma a fost generată
+                {selected.proformaNr ? <> (nr. {selected.proformaNr})</> : null} și a fost transmisă pe email.
+                După confirmarea plății, comanda intră automat în aprobare.
+              </div>
+            )}
             <div className="divider" />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16, fontSize: 13 }}>

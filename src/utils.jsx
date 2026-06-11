@@ -36,6 +36,7 @@ export function fmtDateTime(dateStr) {
 }
 
 const STATUS_MAP = {
+  asteptare_plata: { label: 'Așteptare plată', cls: 'badge-orange' },
   in_aprobare:  { label: 'În aprobare',  cls: 'badge-yellow' },
   aprobat:      { label: 'Aprobat',      cls: 'badge-blue' },
   in_procesare: { label: 'În procesare', cls: 'badge-blue' },

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
+import api from '../api'
 import { lei, leiCuTva, cuTva, tvaVal, fmtDate, statusBadge } from '../utils'
 import StatusTracker from '../components/StatusTracker'
 import { TransportDocsAdmin } from '../components/TransportDocs'
@@ -10,11 +11,13 @@ import EmptyState from '../components/EmptyState'
 
 const STATUS_OPTIONS = [
   { value: 'toate', label: 'Toate statusurile' }, { value: 'plasata', label: 'Plasate' },
+  { value: 'asteptare_plata', label: 'Așteptare plată' },
   { value: 'in_aprobare', label: 'În aprobare' }, { value: 'aprobata', label: 'Aprobate' },
   { value: 'in_procesare', label: 'În procesare' }, { value: 'livrata', label: 'Livrate' },
   { value: 'anulata', label: 'Anulate' },
 ]
 const NEXT_STATUSES = {
+  asteptare_plata: ['in_aprobare', 'anulata'],
   plasata:      ['in_aprobare',  'anulata'],
   in_aprobare:  ['aprobata',     'anulata'],
   aprobata:     ['in_procesare', 'anulata'],
@@ -178,6 +181,35 @@ export default function AdminComenzi() {
             </div>
 
             <StatusTracker status={selected.status} />
+
+            {/* Plată proformă (comenzi blocate de limita de credit) */}
+            {(selected.proformaNr || selected.paymentStatus) && (
+              <div style={{
+                background: selected.paymentStatus === 'platit' ? 'var(--green-bg)' : 'var(--orange-bg)',
+                borderRadius: 8, padding: '10px 14px', margin: '12px 0', fontSize: 12,
+                color: selected.paymentStatus === 'platit' ? 'var(--green-text)' : 'var(--orange-text)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  {selected.paymentStatus === 'platit'
+                    ? <><strong>✓ Plata proformei confirmată în Selectsoft</strong>{selected.paymentConfirmedAt && <span> · {fmtDate(selected.paymentConfirmedAt)}</span>} — comanda poate fi aprobată</>
+                    : <><strong>💰 În așteptarea plății proformei</strong>{selected.proformaNr ? <span> · SS nr. intern: {selected.proformaNr}</span> : <span> · proforma se generează în SS</span>}</>}
+                </div>
+                {selected.paymentStatus !== 'platit' && (
+                  <button className="btn btn-sm btn-secondary" onClick={async () => {
+                    try {
+                      const r = await api.orders.checkPayment(selected.id)
+                      if (r.paid) {
+                        setSelected(prev => ({ ...prev, paymentStatus: 'platit', status: 'in_aprobare' }))
+                        showToast('✓ Plata confirmată în Selectsoft!')
+                      } else {
+                        showToast(r.reason || 'Plata nu a fost încă înregistrată în Selectsoft')
+                      }
+                    } catch (e) { showToast('Eroare verificare: ' + e.message) }
+                  }}>🔄 Verifică plata în SS</button>
+                )}
+              </div>
+            )}
             <div className="divider" />
 
             {/* Status flow */}

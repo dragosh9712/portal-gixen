@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
 import { lei, eur } from '../utils'
 import { calculeazaCos, getPromotiiNotificabile } from '../promoEngine.js'
+import { detectTransportType } from '../config/transport.js'
 
 const TVA = 0.21
 
@@ -33,22 +34,6 @@ function getRelevantUoms(product, transportType) {
   }).sort((a, b) => a.sort_order - b.sort_order)
 }
 
-// Auto-detectare tip transport din coș
-function detectTransportType(liniiCos, products) {
-  let totalRole = 0
-  for (const l of liniiCos) {
-    totalRole += l.cantRole || 0
-  }
-  // Dacă > 1 palet camion mediu → sugerăm camion
-  // Luăm produsul cu cel mai mare palet camion din coș
-  let maxPaletCamion = 0
-  for (const l of liniiCos) {
-    const uom = (l.produs?.product_uom || []).find(u => u.uom_code === 'PALET_CAMION')
-    if (uom && uom.coeficient > maxPaletCamion) maxPaletCamion = uom.coeficient
-  }
-  if (maxPaletCamion > 0 && totalRole >= maxPaletCamion) return 'Truck'
-  return 'Van'
-}
 
 export default function ComandaNoua() {
   const { user } = useAuth()
@@ -130,7 +115,7 @@ export default function ComandaNoua() {
   }, [cart, produse, clientId])
 
   // Bug 14: auto-detectare transport din cantitate
-  const autoTransportType = useMemo(() => detectTransportType(liniiCos, produse), [liniiCos])
+  const autoTransportType = useMemo(() => detectTransportType(liniiCos), [liniiCos])
 
   const { liniiCalculate, discountLinii, totalBrut, totalDiscount, totalNet } = useMemo(() => {
     return calculeazaCos(liniiCos, firma, db)
@@ -170,8 +155,9 @@ export default function ComandaNoua() {
     const creditCheck = await checkCreditLimit(clientId, totalCuTva)
     if (creditCheck.warning) {
       setCreditWarning({ ...creditCheck, orderTotal: totalCuTva })
-      if (creditCheck.block) { setToast({ msg: creditCheck.message, type: 'error' }); return }
     }
+    // Chiar și blocată de limita de credit, comanda poate fi plasată —
+    // intră în 'asteptare_plata' cu proformă generată automat în Selectsoft
     setConfirming(true)
   }
 
@@ -185,10 +171,10 @@ export default function ComandaNoua() {
     createOrder(
       clientId, user.id, lines, dataLivrare, observatii,
       selectedDelivery?.adresa || '', discountLinii,
-      { payment_type: paymentType, transport_type: autoTransportType }
+      { payment_type: paymentType, transport_type: autoTransportType, requires_proforma: !!creditWarning?.block }
     )
     setConfirming(false); setCreditWarning(null); setCart({})
-    setToast({ msg: '✓ Comandă plasată cu succes!', type: 'success' })
+    setToast({ msg: creditWarning?.block ? '✓ Comandă plasată — proforma se generează, vei fi notificat după confirmarea plății.' : '✓ Comandă plasată cu succes!', type: 'success' })
     setTimeout(() => navigate('/comenzile-mele'), 2000)
   }
 
