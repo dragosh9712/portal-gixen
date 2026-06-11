@@ -4,9 +4,27 @@ const { query } = require('../db')
 const { authenticateToken, requireAdmin } = require('../middleware/auth')
 const emailSvc = require('../emailService')
 
+// Asigură coloanele de vizibilitate produse (o singură dată per proces)
+let visColsEnsured = false
+async function ensureVisibilityColumns() {
+  if (visColsEnsured) return
+  try {
+    await query(`
+      IF COL_LENGTH('customers', 'vede_gixen') IS NULL
+        ALTER TABLE customers ADD vede_gixen BIT NOT NULL DEFAULT 1;
+    `)
+    await query(`
+      IF COL_LENGTH('customers', 'brand_propriu') IS NULL
+        ALTER TABLE customers ADD brand_propriu NVARCHAR(100) NULL;
+    `)
+    visColsEnsured = true
+  } catch (e) { console.error('ensureVisibilityColumns:', e.message) }
+}
+
 // GET /api/customers
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    await ensureVisibilityColumns()
     const result = await query(`
       SELECT c.*,
         (SELECT COUNT(*) FROM users u WHERE u.customer_id = c.id AND u.status != 'inactive') AS user_count
@@ -62,11 +80,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (c.customer_group !== undefined) { fields.push('customer_group = @cg');       params.cg = c.customer_group }
     if (c.agent_id !== undefined)   { fields.push('agent_id = @agentId');            params.agentId = c.agent_id }
 
-    const taxId = c.tax_id ?? c.cui
-    if (taxId !== undefined)        { fields.push('tax_id = @taxId');                params.taxId = taxId }
+    const taxId = c.cui ?? c.tax_id
+    if (taxId !== undefined)        { fields.push('cui = @taxId');                   params.taxId = taxId }
 
-    const regCom = c.trade_register_no ?? c.regCom
-    if (regCom !== undefined)       { fields.push('trade_register_no = @regCom');    params.regCom = regCom }
+    const regCom = c.regCom ?? c.reg_com ?? c.trade_register_no
+    if (regCom !== undefined)       { fields.push('reg_com = @regCom');              params.regCom = regCom }
 
     const phone = c.phone ?? c.telefon
     if (phone !== undefined)        { fields.push('phone = @phone');                 params.phone = phone }
@@ -82,12 +100,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (c.platitor_tva !== undefined)    { fields.push('platitor_tva = @ptva');      params.ptva = c.platitor_tva ? 1 : 0 }
     if (c.default_transport_type !== undefined) { fields.push('default_transport_type = @dtt'); params.dtt = c.default_transport_type }
 
-    const marci = c.allowed_brands ?? c.marciPermise
+    const marci = c.marciPermise ?? c.marci_permise_json ?? c.allowed_brands
     if (marci !== undefined) {
       const marciStr = Array.isArray(marci) ? JSON.stringify(marci) : marci
-      fields.push('allowed_brands = @marci')
+      fields.push('marci_permise_json = @marci')
       params.marci = marciStr
     }
+
+    if (c.vede_gixen !== undefined)    { fields.push('vede_gixen = @vg');       params.vg = c.vede_gixen ? 1 : 0 }
+    if (c.brand_propriu !== undefined) { fields.push('brand_propriu = @bp');    params.bp = c.brand_propriu || null }
 
     if (fields.length > 0) {
       await query(`UPDATE customers SET ${fields.join(', ')} WHERE id = @id`, params)

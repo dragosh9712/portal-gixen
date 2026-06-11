@@ -364,6 +364,19 @@ export default function AdminClienti() {
                     </div>
                   </div>
                   <div className="form-group">
+                    <label>Vizibilitate produse</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6, padding: '10px 14px', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                        Produsele proprii (unde clientul e proprietar) sunt vizibile întotdeauna.
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                        <input type="checkbox" checked={editForm.vede_gixen !== false && editForm.vede_gixen !== 0}
+                          onChange={e => setEditForm(p => ({ ...p, vede_gixen: e.target.checked }))} />
+                        <strong>Vede produsele Gixen</strong>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="form-group">
                     <label>Mărci permise</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                       {allMarci.map(m => {

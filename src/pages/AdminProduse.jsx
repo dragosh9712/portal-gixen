@@ -54,6 +54,38 @@ function ImageUpload({ imageUrl, onUpload, onRemove }) {
   )
 }
 
+function OwnerPickerModal({ firms, onSelect, onClose }) {
+  const [q, setQ] = useState('')
+  const filtered = (firms || []).filter(f => {
+    const s = q.toLowerCase()
+    return !s || (f.name || '').toLowerCase().includes(s) || (f.cui || '').toLowerCase().includes(s)
+  })
+  return (
+    <div className="modal-overlay" style={{ zIndex: 60 }} onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Alege proprietarul produsului</h3>
+        <input autoFocus className="w-full" placeholder="Caută client după nume sau CUI..."
+          value={q} onChange={e => setQ(e.target.value)} style={{ marginBottom: 10 }} />
+        <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+          <div onClick={() => onSelect(null)}
+            style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>
+            🏠 Gixen (produs propriu)
+          </div>
+          {filtered.map(f => (
+            <div key={f.id} onClick={() => onSelect(f)}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>{f.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{f.cui || '—'}</div>
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{ padding: 16, fontSize: 12, color: 'var(--text3)', textAlign: 'center' }}>Niciun client găsit</div>}
+        </div>
+        <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={onClose}>Anulează</button>
+      </div>
+    </div>
+  )
+}
+
 const EMPTY_PRODUCT = {
   name: '', cod: '', barcode: '', brand: '', categorie: 'Prosoape',
   product_type: 'P2', white_color_type: 'A', marca: 'Gixen',
@@ -82,6 +114,10 @@ export default function AdminProduse() {
   const [newUom, setNewUom] = useState({ uom_id: '', coeficient: 1 })
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  const [ownerPickerOpen, setOwnerPickerOpen] = useState(false)
+
+  const firms = db.firms || db.customers || []
+  const ownerName = id => firms.find(f => f.id === id)?.name || id
 
   const products = (db.products || []).filter(p => {
     const matchActiv = filterActiv === 'toate' || (filterActiv === 'activ' ? p.activ : !p.activ)
@@ -179,6 +215,14 @@ export default function AdminProduse() {
     }>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
 
+      {ownerPickerOpen && (
+        <OwnerPickerModal firms={firms} onClose={() => setOwnerPickerOpen(false)}
+          onSelect={f => {
+            setEditForm(p => ({ ...p, private_brand_firm_id: f?.id || null, marca: f ? 'Client' : 'Gixen' }))
+            setOwnerPickerOpen(false)
+          }} />
+      )}
+
       {ssResult && (
         <div className="modal-overlay" onClick={() => setSsResult(null)}>
           <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
@@ -235,7 +279,7 @@ export default function AdminProduse() {
                 return (
                   <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => openProduct(p)}>
                     <td>
-                      <div style={{ fontWeight: 500, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                      <div style={{ fontWeight: 500, maxWidth: 320, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>{p.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.cod}</div>
                     </td>
                     <td style={{ fontSize: 12 }}>{p.brand || '—'}</td>
@@ -325,11 +369,13 @@ export default function AdminProduse() {
                       </div>
                     ))}
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label>Marcă</label>
-                      <select className="w-full" value={editForm.marca || 'Gixen'} onChange={e => setEditForm(p => ({ ...p, marca: e.target.value }))}>
-                        <option value="Gixen">Gixen</option>
-                        <option value="Client">Client</option>
-                      </select>
+                      <label>Proprietar produs</label>
+                      <button type="button" className="w-full" onClick={() => setOwnerPickerOpen(true)}
+                        style={{ textAlign: 'left', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', cursor: 'pointer', fontSize: 13 }}>
+                        {editForm.private_brand_firm_id
+                          ? <>👤 {ownerName(editForm.private_brand_firm_id)}</>
+                          : <>🏠 Gixen (produs propriu)</>}
+                      </button>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label>Tip produs</label>

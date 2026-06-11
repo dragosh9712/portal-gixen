@@ -2,9 +2,22 @@ const router = require('express').Router()
 const { query, sql } = require('../db')
 const { authenticateToken, requireAdmin } = require('../middleware/auth')
 
+let pbfColEnsured = false
+async function ensurePrivateBrandColumn() {
+  if (pbfColEnsured) return
+  try {
+    await query(`
+      IF COL_LENGTH('products', 'private_brand_firm_id') IS NULL
+        ALTER TABLE products ADD private_brand_firm_id VARCHAR(64) NULL;
+    `)
+    pbfColEnsured = true
+  } catch (e) { console.error('ensurePrivateBrandColumn:', e.message) }
+}
+
 // GET /api/products
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    await ensurePrivateBrandColumn()
     const { marca, categorie, active_only, search } = req.query
     let where = 'WHERE 1=1'
     if (active_only !== 'false') where += ' AND p.is_active = 1'
@@ -197,6 +210,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         marca                 = @marca,
         brand                 = @brand,
         label_brand           = @label_brand,
+        private_brand_firm_id = @pbfid,
         rolls_per_pack        = @rpb,
         packs_per_pallet_van  = @ppv,
         packs_per_pallet_truck= @ppt,
@@ -218,6 +232,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       marca:       p.marca                  || 'Gixen',
       brand:       p.brand                  || null,
       label_brand: p.label_brand            || null,
+      pbfid:       p.private_brand_firm_id  || null,
       rpb:         p.rolls_per_pack         || 6,
       ppv:         p.packs_per_pallet_van   || 44,
       ppt:         p.packs_per_pallet_truck || 56,
