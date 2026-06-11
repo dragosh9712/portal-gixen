@@ -363,18 +363,23 @@ export default function AdminClienti() {
                       </select>
                     </div>
                   </div>
-                  <div className="form-group">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Vizibilitate produse</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6, padding: '10px 14px', background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-                        Produsele proprii (unde clientul e proprietar) sunt vizibile întotdeauna.
-                      </div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
-                        <input type="checkbox" checked={editForm.vede_gixen !== false && editForm.vede_gixen !== 0}
-                          onChange={e => setEditForm(p => ({ ...p, vede_gixen: e.target.checked }))} />
-                        <strong>Vede produsele Gixen</strong>
-                      </label>
-                    </div>
+                    <select className="w-full" value={editForm.vizibilitate_produse || 'gixen_si_proprii'}
+                      onChange={e => setEditForm(p => ({ ...p, vizibilitate_produse: e.target.value }))}>
+                      <option value="gixen_si_proprii">Produse Gixen + proprii</option>
+                      <option value="doar_proprii">Doar produse proprii</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Paletizare preferată (afișaj prețuri)</label>
+                    <select className="w-full" value={editForm.paletizare_preferata || 'BAX'}
+                      onChange={e => setEditForm(p => ({ ...p, paletizare_preferata: e.target.value }))}>
+                      <option value="ROLA">Rolă</option>
+                      <option value="BAX">Bax</option>
+                      <option value="PALET_DUBA">Palet Duba</option>
+                      <option value="PALET_CAMION">Palet Camion (TIR)</option>
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Mărci permise</label>

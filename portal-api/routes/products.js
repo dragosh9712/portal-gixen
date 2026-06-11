@@ -32,44 +32,26 @@ router.get('/', authenticateToken, async (req, res) => {
     if (req.user.role === 'client' && req.user.customerId) {
       try {
         const clientResult = await query(
-          'SELECT brand_propriu, vede_gixen, allowed_brands FROM customers WHERE id = @cid',
+          'SELECT vizibilitate_produse, private_brand_firm_id FROM customers WHERE id = @cid',
           { cid: req.user.customerId }
         )
         const client = clientResult.recordset[0]
         if (client) {
-          // Build the set of allowed marca values for this client:
-          // - Always include own brand (brand_propriu) if set
-          // - Include 'Gixen' if vede_gixen = 1 OR client has no brand_propriu (default)
-          // - Include any extra brands from marci_permise_json
-          const allowedMarca = new Set()
-
-          const hasBrandPropriu = !!(client.brand_propriu && client.brand_propriu.trim())
-
-          if (hasBrandPropriu) {
-            allowedMarca.add(client.brand_propriu.trim())
-          }
-
-          if (client.vede_gixen || !hasBrandPropriu) {
-            allowedMarca.add('Gixen')
-          }
-
-          try {
-            const extra = client.allowed_brands ? JSON.parse(client.allowed_brands) : []
-            if (Array.isArray(extra)) extra.forEach(m => m && allowedMarca.add(m))
-          } catch {}
-
-          if (allowedMarca.size > 0) {
-            const marcaArr = [...allowedMarca]
-            const ph = marcaArr.map((_, i) => `@bm${i}`).join(',')
-            marcaArr.forEach((m, i) => { params[`bm${i}`] = m })
-            // Client sees products matching allowed marca OR products belonging to their firm
-            where += ` AND (p.marca IN (${ph}) OR p.private_brand_firm_id = @clientFirmId)`
+          const viz = client.vizibilitate_produse || 'gixen_si_proprii'
+          if (viz === 'doar_proprii') {
+            // Only products owned by this firm
+            where += ' AND p.private_brand_firm_id = @clientFirmId'
+            params.clientFirmId = req.user.customerId
+          } else {
+            // gixen_si_proprii (default): Gixen products + own products
+            where += ' AND (p.marca = @gixenMarca OR p.private_brand_firm_id = @clientFirmId)'
+            params.gixenMarca = 'Gixen'
             params.clientFirmId = req.user.customerId
           }
         }
       } catch (e) {
         console.error('Product filter error:', e.message)
-        // On error, fall through and show all active products
+        // On error fall through — show all active products
       }
     }
 

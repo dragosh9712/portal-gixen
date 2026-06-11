@@ -102,8 +102,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       params.marci = marciStr
     }
 
-    if (c.vede_gixen !== undefined)    { fields.push('vede_gixen = @vg');       params.vg = c.vede_gixen ? 1 : 0 }
-    if (c.brand_propriu !== undefined) { fields.push('brand_propriu = @bp');    params.bp = c.brand_propriu || null }
+    if (c.vede_gixen !== undefined)          { fields.push('vede_gixen = @vg');               params.vg = c.vede_gixen ? 1 : 0 }
+    if (c.brand_propriu !== undefined)       { fields.push('brand_propriu = @bp');            params.bp = c.brand_propriu || null }
+    if (c.vizibilitate_produse !== undefined){ fields.push('vizibilitate_produse = @viz');    params.viz = c.vizibilitate_produse }
+    if (c.paletizare_preferata !== undefined){ fields.push('paletizare_preferata = @palet');  params.palet = c.paletizare_preferata || null }
 
     if (fields.length > 0) {
       await query(`UPDATE customers SET ${fields.join(', ')} WHERE id = @id`, params)
