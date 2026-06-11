@@ -34,6 +34,8 @@ export default function AdminClienti() {
   const [clientNotes, setClientNotes] = useState([])
   const [newNote, setNewNote] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [ssSyncing, setSsSyncing] = useState(false)
+  const [ssResult, setSsResult] = useState(null)
 
   const firms = (db.firms || []).filter(f => {
     const matchStatus = filterStatus === 'toate' || f.status === filterStatus
@@ -160,16 +162,52 @@ export default function AdminClienti() {
   return (
     <Layout title="Gestiune clienți" actions={
       <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn btn-secondary btn-sm" onClick={async () => {
-          showToast('Sincronizare Selectsoft pornită...')
+        <button className="btn btn-secondary btn-sm" disabled={ssSyncing} onClick={async () => {
+          setSsSyncing(true)
           try {
             const r = await api.selectsoft.syncCustomers()
-            showToast(r.message || 'Sincronizare finalizată', r.ok ? 'success' : 'error')
-          } catch (err) { showToast(err.message || 'Eroare sincronizare', 'error') }
-        }}>🔄 Sync SS</button>
+            setSsResult(r)
+          } catch (err) { setSsResult({ ok: false, error: err.message }) }
+          finally { setSsSyncing(false) }
+        }}>{ssSyncing ? '⏳ Sincronizare...' : '🔄 Sync Selectsoft'}</button>
       </div>
     }>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+
+      {ssResult && (
+        <div className="modal-overlay" onClick={() => setSsResult(null)}>
+          <div className="modal" style={{ maxWidth: 560, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Rezultat sincronizare clienți Selectsoft</h3>
+            {ssResult.ok === false && <p style={{ color: 'var(--red, #c0392b)' }}>Eroare: {ssResult.error}</p>}
+            {ssResult.message && <p>{ssResult.message}</p>}
+            {(ssResult.matchedList || []).length > 0 && (
+              <>
+                <h4>✅ Clienți legați de Selectsoft ({ssResult.matchedList.length}):</h4>
+                <ul style={{ fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                  {ssResult.matchedList.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            )}
+            {(ssResult.unmatchedList || []).length > 0 && (
+              <>
+                <h4>❓ Parteneri SS fără cont în portal (primii {ssResult.unmatchedList.length}):</h4>
+                <ul style={{ fontSize: 12, maxHeight: 200, overflow: 'auto', color: 'var(--text2)' }}>
+                  {ssResult.unmatchedList.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            )}
+            {(ssResult.errors || []).length > 0 && (
+              <>
+                <h4>⚠️ Erori:</h4>
+                <ul style={{ fontSize: 12, color: 'var(--red, #c0392b)' }}>
+                  {ssResult.errors.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            )}
+            <button className="btn btn-primary" onClick={() => setSsResult(null)}>Închide</button>
+          </div>
+        </div>
+      )}
 
       {/* Filtre */}
       <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>

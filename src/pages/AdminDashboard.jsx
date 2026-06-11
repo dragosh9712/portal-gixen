@@ -1,14 +1,30 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { lei, fmtDate, statusBadge } from '../utils'
+import api from '../api'
 
 const COLORS = ['#1a6bbf', '#27a355', '#e6931a', '#9b59b6', '#e74c3c']
 
 export default function AdminDashboard() {
-  const { db, updateOrderStatus } = useStore()
+  const { db, updateOrderStatus, refreshAll } = useStore()
+  const [bnrLoading, setBnrLoading] = useState(false)
+  const [bnrMsg, setBnrMsg] = useState(null)
+
+  async function handleRefreshBNR() {
+    setBnrLoading(true); setBnrMsg(null)
+    try {
+      const r = await api.exchange.refreshBNR()
+      setBnrMsg(`✓ Curs BNR: ${r.bnr_rate} → aplicat: ${r.applied_rate} RON/EUR`)
+      refreshAll?.()
+    } catch (err) {
+      setBnrMsg(`✗ ${err.message}`)
+    } finally {
+      setBnrLoading(false)
+    }
+  }
   const navigate = useNavigate()
 
   const orders = db.orders
@@ -66,6 +82,17 @@ export default function AdminDashboard() {
           <div className="kpi-label">Livrate</div>
           <div className="kpi-val">{kpi.livrate}</div>
           <div className="kpi-sub">finalizate</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-label">Curs EUR (BNR + marjă)</div>
+          <div className="kpi-val" style={{ fontSize: 18 }}>
+            {db.exchange?.rate ? `${Number(db.exchange.rate).toFixed(4)} RON` : '—'}
+          </div>
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 6 }}
+            onClick={handleRefreshBNR} disabled={bnrLoading}>
+            {bnrLoading ? '⏳ Se actualizează...' : '🔄 Actualizează BNR'}
+          </button>
+          {bnrMsg && <div className="kpi-sub" style={{ marginTop: 4 }}>{bnrMsg}</div>}
         </div>
       </div>
 

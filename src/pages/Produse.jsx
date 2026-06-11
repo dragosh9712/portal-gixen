@@ -31,7 +31,7 @@ export default function Produse() {
 
   const filtered = products.filter(p => {
     const matchCat = catFilter === 'toate' || p.categorie === catFilter
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.cod.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = (p.name || '').toLowerCase().includes(search.toLowerCase()) || (p.cod || '').toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
 
@@ -151,7 +151,7 @@ export default function Produse() {
             <table>
               <thead><tr><th>Cantitate</th><th>Preț bază / {selected.unitate}</th><th>Prețul tău</th></tr></thead>
               <tbody>
-                {selected.tierPricing.map((t, i) => {
+                {(selected.tierPricing || []).map((t, i) => {
                   const pricing = calcLinePrice(selected, t.cantMin, firmId, db)
                   return (
                     <tr key={i}>

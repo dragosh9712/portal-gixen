@@ -24,6 +24,7 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
     let offset = 0
     const limit = 200
     let updated = 0, created = 0, skipped = 0
+    const updatedList = [], createdList = []
     const errors = []
 
     while (true) {
@@ -55,6 +56,7 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
               )
             }
             updated++
+            updatedList.push(`${p.cod} — ${p.denumire || ''}`)
           } else {
             const id = 'p_ss_' + p.cod
             await query(`
@@ -71,6 +73,7 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
               )
             }
             created++
+            createdList.push(`${p.cod} — ${p.denumire || ''}`)
           }
         } catch (e) { errors.push(`${p.cod}: ${e.message}`) }
       }
@@ -83,6 +86,7 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
       ok: true,
       message: `Sincronizare produse: ${updated} actualizate, ${created} create (inactive, de revizuit), ${skipped} excluse (fsinc)`,
       updated, created, skipped,
+      updatedList, createdList,
       errors: errors.slice(0, 20),
     })
   } catch (err) {
@@ -97,14 +101,15 @@ router.post('/sync-customers', authenticateToken, requireAdmin, async (req, res)
     let offset = 0
     const limit = 100
     let matched = 0, unmatched = 0
+    const matchedList = [], unmatchedList = []
     const errors = []
     const normalize = cf => String(cf || '').replace(/\s/g, '').replace(/^RO/i, '')
 
-    const customersResult = await query('SELECT id, tax_id FROM customers WHERE tax_id IS NOT NULL')
+    const customersResult = await query('SELECT id, name, tax_id FROM customers WHERE tax_id IS NOT NULL')
     const byCui = new Map()
     for (const c of customersResult.recordset) {
       const k = normalize(c.tax_id)
-      if (k) byCui.set(k, c.id)
+      if (k) byCui.set(k, c)
     }
 
     while (true) {
@@ -115,15 +120,17 @@ router.post('/sync-customers', authenticateToken, requireAdmin, async (req, res)
       for (const p of parteneri) {
         try {
           const cui = normalize(p.cod_fiscal)
-          const customerId = cui && byCui.get(cui)
-          if (customerId) {
+          const cust = cui && byCui.get(cui)
+          if (cust) {
             await query(
               'UPDATE customers SET selectsoft_cod_parten = @cod WHERE id = @id',
-              { id: customerId, cod: String(p.cod_parten) }
+              { id: cust.id, cod: String(p.cod_parten) }
             )
             matched++
+            matchedList.push(`${cust.name} (CUI ${p.cod_fiscal}) ↔ SS #${p.cod_parten}`)
           } else {
             unmatched++
+            if (unmatchedList.length < 100) unmatchedList.push(`${p.denumire || '?'} (CUI ${p.cod_fiscal || '—'}) SS #${p.cod_parten}`)
           }
         } catch (e) { errors.push(`${p.cod_parten}: ${e.message}`) }
       }
@@ -136,6 +143,7 @@ router.post('/sync-customers', authenticateToken, requireAdmin, async (req, res)
       ok: true,
       message: `Sincronizare clienți: ${matched} legați de Selectsoft, ${unmatched} parteneri SS fără cont în portal`,
       matched, unmatched,
+      matchedList, unmatchedList,
       errors: errors.slice(0, 20),
     })
   } catch (err) {

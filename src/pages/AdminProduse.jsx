@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { lei } from '../utils'
+import api from '../api'
 
 function Toast({ msg, onDone }) {
   return <div className="toast success" onClick={onDone} style={{ cursor: 'pointer' }}>✓ {msg}</div>
@@ -155,7 +156,7 @@ function GlobalTierModal({ products, onSave, onClose }) {
 }
 
 export default function AdminProduse() {
-  const { db, updateProduct, addProduct } = useStore()
+  const { db, updateProduct, addProduct, refreshProducts } = useStore()
   const [selected, setSelected] = useState(null)
   const [isNew, setIsNew] = useState(false)
   const [form, setForm] = useState(null)
@@ -163,6 +164,8 @@ export default function AdminProduse() {
   const [toast, setToast] = useState(null)
   const [showGlobal, setShowGlobal] = useState(false)
   const [search, setSearch] = useState('')
+  const [ssSyncing, setSsSyncing] = useState(false)
+  const [ssResult, setSsResult] = useState(null)
 
   const emptyProduct = {
     cod: '', name: '', categorie: '', pretBaza: '', unitate: 'rola',
@@ -175,13 +178,13 @@ export default function AdminProduse() {
   }
 
   const filtered = db.products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.cod.toLowerCase().includes(search.toLowerCase())
+    (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (p.cod || '').toLowerCase().includes(search.toLowerCase())
   )
 
   function openEdit(product) {
     setSelected(product)
-    setForm({ ...product, tierPricing: product.tierPricing.map(t => ({ ...t })) })
+    setForm({ ...product, tierPricing: (product.tierPricing || []).map(t => ({ ...t })) })
     setIsNew(false)
     setImgPreviewErr(false)
   }
@@ -210,7 +213,7 @@ export default function AdminProduse() {
         newTiers = tiers.map((t, i) => ({
           cantMin: t.cantMin,
           cantMax: t.cantMax,
-          pret: product.tierPricing[i]?.pret || product.pretBaza || t.pret
+          pret: (product.tierPricing || [])[i]?.pret || product.pretBaza || t.pret
         }))
       } else {
         newTiers = tiers.map(t => ({ ...t }))
@@ -226,11 +229,27 @@ export default function AdminProduse() {
     setTimeout(() => setToast(null), 2500)
   }
 
+  async function handleSyncSS() {
+    setSsSyncing(true)
+    try {
+      const r = await api.selectsoft.syncProducts()
+      setSsResult(r)
+      if (r.ok) refreshProducts?.()
+    } catch (err) {
+      setSsResult({ ok: false, error: err.message })
+    } finally {
+      setSsSyncing(false)
+    }
+  }
+
   const imgPreview = form?.imagine && !imgPreviewErr
 
   return (
     <Layout title="Gestiune produse" actions={
       <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-secondary btn-sm" onClick={handleSyncSS} disabled={ssSyncing}>
+          {ssSyncing ? '⏳ Sincronizare...' : '🔄 Sync Selectsoft'}
+        </button>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowGlobal(true)}>
           ⚙ Tier pricing global
         </button>
@@ -238,6 +257,41 @@ export default function AdminProduse() {
       </div>
     }>
       {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
+
+      {ssResult && (
+        <div className="modal-overlay" onClick={() => setSsResult(null)}>
+          <div className="modal" style={{ maxWidth: 560, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Rezultat sincronizare Selectsoft</h3>
+            {ssResult.ok === false && <p style={{ color: 'var(--red, #c0392b)' }}>Eroare: {ssResult.error}</p>}
+            {ssResult.message && <p>{ssResult.message}</p>}
+            {(ssResult.createdList || []).length > 0 && (
+              <>
+                <h4>🆕 Produse create ({ssResult.createdList.length}) — inactive, de revizuit:</h4>
+                <ul style={{ fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                  {ssResult.createdList.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            )}
+            {(ssResult.updatedList || []).length > 0 && (
+              <>
+                <h4>♻️ Produse actualizate ({ssResult.updatedList.length}):</h4>
+                <ul style={{ fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                  {ssResult.updatedList.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            )}
+            {(ssResult.errors || []).length > 0 && (
+              <>
+                <h4>⚠️ Erori:</h4>
+                <ul style={{ fontSize: 12, color: 'var(--red, #c0392b)' }}>
+                  {ssResult.errors.map((x, i) => <li key={i}>{x}</li>)}
+                </ul>
+              </>
+            )}
+            <button className="btn btn-primary" onClick={() => setSsResult(null)}>Închide</button>
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <input type="text" placeholder="Caută produs după nume sau cod..."
@@ -276,7 +330,7 @@ export default function AdminProduse() {
                   <td>{lei(p.pretBaza)}/{p.unitate}</td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {p.tierPricing.map((t, i) => (
+                      {(p.tierPricing || []).map((t, i) => (
                         <div key={i} style={{ fontSize: 10, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
                           {t.cantMin}–{t.cantMax >= 9999 ? '∞' : t.cantMax}: <b>{lei(t.pret)}</b>
                         </div>
