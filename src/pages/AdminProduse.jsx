@@ -279,8 +279,17 @@ export default function AdminProduse() {
                 return (
                   <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => openProduct(p)}>
                     <td>
-                      <div style={{ fontWeight: 500, maxWidth: 320, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.cod}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                          {hasImage
+                            ? <img src={p.image_url || p.imagine} alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />
+                            : <span style={{ fontSize: 18, opacity: 0.4 }}>🧻</span>}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 500, maxWidth: 300, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.cod}</div>
+                        </div>
+                      </div>
                     </td>
                     <td style={{ fontSize: 12 }}>{p.brand || '—'}</td>
                     <td><span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 4, fontFamily: 'monospace' }}>{p.product_type || '—'}</span></td>

@@ -93,6 +93,7 @@ router.get('/', authenticateToken, async (req, res) => {
       cod:            p.code || '',
       pretBaza:       parseFloat(p.active_base_price) || 0,
       stoc:           p.stoc != null ? Number(p.stoc) : 0,
+      imagine:        p.image_url || null,
       tierPricing:    [],
       product_uom:    p.uom_json    ? JSON.parse(p.uom_json)    : [],
       product_prices: p.prices_json ? JSON.parse(p.prices_json) : [],
