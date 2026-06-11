@@ -5,6 +5,15 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth')
 // GET /api/credit/:id
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
+    await query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='credit_limits')
+      CREATE TABLE credit_limits (
+        customer_id               VARCHAR(64) PRIMARY KEY,
+        credit_limit              DECIMAL(18,2) DEFAULT 0,
+        limit_currency            VARCHAR(10)   DEFAULT 'RON',
+        notification_threshold_pct INT          DEFAULT 80,
+        block_on_exceed           BIT           DEFAULT 0
+      )`)
     const result = await query(`
       SELECT
         cl.customer_id,
@@ -13,7 +22,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
         ISNULL(cl.notification_threshold_pct, 80) AS notification_threshold_pct,
         ISNULL(cl.block_on_exceed, 0)             AS block_on_exceed,
         ISNULL(
-          (SELECT SUM(o.total) FROM orders o
+          (SELECT SUM(o.gross_total) FROM orders o
            WHERE o.customer_id = cl.customer_id
              AND o.status NOT IN ('anulata','anulat','respinsa')), 0
         ) AS used_credit

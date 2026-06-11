@@ -53,6 +53,18 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 // GET /api/agents/commission-rules
 router.get('/commission-rules', authenticateToken, async (req, res) => {
   try {
+    await query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='commission_rules')
+      CREATE TABLE commission_rules (
+        id          VARCHAR(64) PRIMARY KEY,
+        agent_id    VARCHAR(64),
+        product_id  VARCHAR(64),
+        customer_id VARCHAR(64),
+        rate        DECIMAL(10,4) DEFAULT 1.5,
+        priority    INT DEFAULT 10,
+        notes       NVARCHAR(500),
+        is_active   BIT DEFAULT 1
+      )`)
     const result = await query(`SELECT * FROM commission_rules ORDER BY priority DESC`)
     res.json(result.recordset)
   } catch (err) { res.status(500).json({ error: err.message }) }

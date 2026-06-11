@@ -10,7 +10,7 @@ const EMPTY_DB = {
   promotions: [], promotionRules: [], offers: [],
   clientPricing: [], favorites: [],
   agents: [], locations: [], exchange: null,
-  commissionRules: [], uoms: [], unit_of_measure: [], recipes: [], surveys: [], survey_results: [],
+  commissionRules: [], commission_rules: [], uoms: [], unit_of_measure: [], recipes: [], surveys: [], survey_results: [],
 }
 
 export function StoreProvider({ children }) {
