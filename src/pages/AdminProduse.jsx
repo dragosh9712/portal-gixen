@@ -218,7 +218,7 @@ export default function AdminProduse() {
       {ownerPickerOpen && (
         <OwnerPickerModal firms={firms} onClose={() => setOwnerPickerOpen(false)}
           onSelect={f => {
-            setEditForm(p => ({ ...p, private_brand_firm_id: f?.id || null, marca: f ? 'Client' : 'Gixen' }))
+            setEditForm(p => ({ ...p, private_brand_firm_id: f?.id || null, marca: f ? 'Client' : 'Gixen', vizibilitate: f ? 'privat' : (p.vizibilitate || 'public') }))
             setOwnerPickerOpen(false)
           }} />
       )}
@@ -385,6 +385,14 @@ export default function AdminProduse() {
                           ? <>👤 {ownerName(editForm.private_brand_firm_id)}</>
                           : <>🏠 Gixen (produs propriu)</>}
                       </button>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Vizibilitate</label>
+                      <select className="w-full" value={(editForm.vizibilitate || 'public').startsWith('privat') ? 'privat' : 'public'}
+                        onChange={e => setEditForm(p => ({ ...p, vizibilitate: e.target.value }))}>
+                        <option value="public">Public (vizibil tuturor clienților)</option>
+                        <option value="privat">Privat (doar proprietarul)</option>
+                      </select>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label>Tip produs</label>

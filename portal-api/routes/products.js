@@ -10,6 +10,9 @@ async function ensurePrivateBrandColumn() {
       IF COL_LENGTH('products', 'private_brand_firm_id') IS NULL
         ALTER TABLE products ADD private_brand_firm_id VARCHAR(64) NULL;
     `)
+    // Normalizare valori corupte ('public,public', 'privat,privat' etc.)
+    await query(`UPDATE products SET vizibilitate = 'public' WHERE vizibilitate LIKE 'public%' AND vizibilitate <> 'public'`)
+    await query(`UPDATE products SET vizibilitate = 'privat' WHERE vizibilitate LIKE 'privat%' AND vizibilitate <> 'privat'`)
     pbfColEnsured = true
   } catch (e) { console.error('ensurePrivateBrandColumn:', e.message) }
 }
@@ -37,22 +40,26 @@ router.get('/', authenticateToken, async (req, res) => {
           { cid: req.user.customerId }
         )
         const client = clientResult.recordset[0]
-        if (client) {
-          const viz = client.vizibilitate_produse || 'gixen_si_proprii'
-          if (viz === 'doar_proprii') {
-            // Only products owned by this firm
-            where += ' AND p.private_brand_firm_id = @clientFirmId'
-            params.clientFirmId = req.user.customerId
-          } else {
-            // gixen_si_proprii (default): Gixen products + own products
-            where += ' AND (p.marca = @gixenMarca OR p.private_brand_firm_id = @clientFirmId)'
-            params.gixenMarca = 'Gixen'
-            params.clientFirmId = req.user.customerId
-          }
+        const viz = (client?.vizibilitate_produse || 'gixen_si_proprii').trim()
+        params.clientFirmId = req.user.customerId
+        if (viz === 'doar_proprii') {
+          // Doar produsele proprii ale firmei
+          where += ' AND p.private_brand_firm_id = @clientFirmId'
+        } else {
+          // gixen_si_proprii (default): produse publice + produsele proprii.
+          // Produsele private ale altor firme NU sunt vizibile niciodată.
+          where += ` AND (
+            p.private_brand_firm_id = @clientFirmId
+            OR (
+              (p.vizibilitate IS NULL OR p.vizibilitate LIKE 'public%')
+              AND (p.private_brand_firm_id IS NULL OR p.private_brand_firm_id = '' OR p.private_brand_firm_id = @clientFirmId)
+            )
+          )`
         }
       } catch (e) {
         console.error('Product filter error:', e.message)
-        // On error fall through — show all active products
+        // Fail-closed: dacă filtrul nu poate fi aplicat, clientul nu vede produse private
+        where += " AND (p.vizibilitate IS NULL OR p.vizibilitate LIKE 'public%')"
       }
     }
 
@@ -195,6 +202,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         brand                 = @brand,
         label_brand           = @label_brand,
         private_brand_firm_id = @pbfid,
+        vizibilitate          = COALESCE(@vizibilitate, vizibilitate),
         rolls_per_pack        = @rpb,
         packs_per_pallet_van  = @ppv,
         packs_per_pallet_truck= @ppt,
@@ -217,6 +225,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       brand:       p.brand                  || null,
       label_brand: p.label_brand            || null,
       pbfid:       p.private_brand_firm_id  || null,
+      vizibilitate: p.vizibilitate === 'privat' ? 'privat' : (p.vizibilitate ? 'public' : null),
       rpb:         p.rolls_per_pack         || 6,
       ppv:         p.packs_per_pallet_van   || 44,
       ppt:         p.packs_per_pallet_truck || 56,

@@ -132,40 +132,33 @@ export default function Produse() {
               </div>
             </div>
 
-            <div className="section-title" style={{ marginBottom: 8 }}>Prețuri pe unitate de măsură</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Unitate</th>
-                  <th>Conținut</th>
-                  <th>Preț</th>
-                  {globalDiscount > 0 && <th>Prețul tău (-{Math.round(globalDiscount * 100)}%)</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {(selected.product_uom || [])
-                  .filter(u => u.is_offer_display || u.is_orderable)
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map(u => {
-                    const baseP = parseFloat(selected.pretBaza || selected.active_base_price || 0)
-                    const uomPrice = Math.round(baseP * u.coeficient * 100) / 100
-                    const discP = globalDiscount > 0 ? Math.round(uomPrice * (1 - globalDiscount) * 100) / 100 : null
-                    const isPreferred = u.uom_code === paletizare
-                    return (
-                      <tr key={u.uom_code} style={{ background: isPreferred ? 'var(--blue-bg)' : undefined }}>
-                        <td style={{ fontWeight: isPreferred ? 700 : 500 }}>
-                          {u.uom_name} {isPreferred && <span style={{ fontSize: 10, color: 'var(--blue-text)' }}>★ preferat</span>}
-                        </td>
-                        <td style={{ fontSize: 12, color: 'var(--text3)' }}>{u.coeficient} role</td>
-                        <td>{uomPrice > 0 ? lei(uomPrice) : '—'}</td>
+            <div className="section-title" style={{ marginBottom: 8 }}>Prețul tău</div>
+            {(() => {
+              const { price, coef, uomName } = calcPaletPrice(selected, paletizare)
+              const discP = globalDiscount > 0 ? Math.round(price * (1 - globalDiscount) * 100) / 100 : price
+              return (
+                <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{uomName}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{coef} role</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {discP > 0 ? (
+                      <>
+                        <div style={{ fontSize: 18, fontWeight: 700 }}>{lei(discP)}</div>
                         {globalDiscount > 0 && (
-                          <td style={{ fontWeight: 600, color: 'var(--green-text)' }}>{discP > 0 ? lei(discP) : '—'}</td>
+                          <div style={{ fontSize: 11, color: 'var(--green-text)' }}>
+                            discount {Math.round(globalDiscount * 100)}% aplicat
+                          </div>
                         )}
-                      </tr>
-                    )
-                  })}
-              </tbody>
-            </table>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: 'var(--text3)' }}>Preț la cerere</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelected(null)}>Închide</button>
