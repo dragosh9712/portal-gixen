@@ -9,14 +9,9 @@ let visColsEnsured = false
 async function ensureVisibilityColumns() {
   if (visColsEnsured) return
   try {
-    await query(`
-      IF COL_LENGTH('customers', 'vede_gixen') IS NULL
-        ALTER TABLE customers ADD vede_gixen BIT NOT NULL DEFAULT 1;
-    `)
-    await query(`
-      IF COL_LENGTH('customers', 'brand_propriu') IS NULL
-        ALTER TABLE customers ADD brand_propriu NVARCHAR(100) NULL;
-    `)
+    // vede_gixen and brand_propriu may already exist from earlier migration
+    await query(`IF COL_LENGTH('customers','vede_gixen') IS NULL ALTER TABLE customers ADD vede_gixen BIT NOT NULL DEFAULT 1`)
+    await query(`IF COL_LENGTH('customers','brand_propriu') IS NULL ALTER TABLE customers ADD brand_propriu NVARCHAR(100) NULL`)
     visColsEnsured = true
   } catch (e) { console.error('ensureVisibilityColumns:', e.message) }
 }
@@ -50,7 +45,7 @@ router.post('/', async (req, res) => {
     const c = req.body
     const id = 'cust_' + Date.now()
     await query(`
-      INSERT INTO customers (id, name, cui, reg_com, address, phone, email, contact_name, contact_email, status, created_at)
+      INSERT INTO customers (id, name, tax_id, trade_register_no, address, phone, email, contact_name, contact_email, status, created_at)
       VALUES (@id, @name, @cui, @regCom, @adresa, @telefon, @email, @contactName, @contactEmail, 'in_aprobare', GETDATE())
     `, { id, name: c.name, cui: c.cui || '', regCom: c.regCom || '', adresa: c.adresa || '', telefon: c.telefon || '', email: c.email || '', contactName: c.contact_name || '', contactEmail: c.contact_email || '' })
 
@@ -80,11 +75,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (c.customer_group !== undefined) { fields.push('customer_group = @cg');       params.cg = c.customer_group }
     if (c.agent_id !== undefined)   { fields.push('agent_id = @agentId');            params.agentId = c.agent_id }
 
-    const taxId = c.cui ?? c.tax_id
-    if (taxId !== undefined)        { fields.push('cui = @taxId');                   params.taxId = taxId }
+    const taxId = c.tax_id ?? c.cui
+    if (taxId !== undefined)        { fields.push('tax_id = @taxId');                params.taxId = taxId }
 
-    const regCom = c.regCom ?? c.reg_com ?? c.trade_register_no
-    if (regCom !== undefined)       { fields.push('reg_com = @regCom');              params.regCom = regCom }
+    const regCom = c.trade_register_no ?? c.regCom ?? c.reg_com
+    if (regCom !== undefined)       { fields.push('trade_register_no = @regCom');   params.regCom = regCom }
 
     const phone = c.phone ?? c.telefon
     if (phone !== undefined)        { fields.push('phone = @phone');                 params.phone = phone }
@@ -103,7 +98,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const marci = c.marciPermise ?? c.marci_permise_json ?? c.allowed_brands
     if (marci !== undefined) {
       const marciStr = Array.isArray(marci) ? JSON.stringify(marci) : marci
-      fields.push('marci_permise_json = @marci')
+      fields.push('allowed_brands = @marci')
       params.marci = marciStr
     }
 

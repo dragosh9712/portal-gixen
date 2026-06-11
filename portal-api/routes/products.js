@@ -32,7 +32,7 @@ router.get('/', authenticateToken, async (req, res) => {
     if (req.user.role === 'client' && req.user.customerId) {
       try {
         const clientResult = await query(
-          'SELECT brand_propriu, vede_gixen, marci_permise_json FROM customers WHERE id = @cid',
+          'SELECT brand_propriu, vede_gixen, allowed_brands FROM customers WHERE id = @cid',
           { cid: req.user.customerId }
         )
         const client = clientResult.recordset[0]
@@ -54,7 +54,7 @@ router.get('/', authenticateToken, async (req, res) => {
           }
 
           try {
-            const extra = client.marci_permise_json ? JSON.parse(client.marci_permise_json) : []
+            const extra = client.allowed_brands ? JSON.parse(client.allowed_brands) : []
             if (Array.isArray(extra)) extra.forEach(m => m && allowedMarca.add(m))
           } catch {}
 
