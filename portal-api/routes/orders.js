@@ -154,6 +154,60 @@ router.post('/', authenticateToken, async (req, res) => {
     await query(`UPDATE orders SET net_total=@net, tva_total=@tva, gross_total=@gross WHERE id=@id`,
       { id, net: Math.round(netTotal * 100) / 100, tva: tvaTotal, gross: grossTotal })
 
+    // Push comandă în Selectsoft (dacă e activat în .env: SELECTSOFT_PUSH_ORDERS=true)
+    if (process.env.SELECTSOFT_PUSH_ORDERS === 'true') {
+      ;(async () => {
+        const ss = require('../selectsoftService')
+        if (!ss.isConfigured()) return
+        const custRes = await query('SELECT * FROM customers WHERE id = @id', { id: o.customer_id })
+        const cust = custRes.recordset[0]
+        if (!cust) return
+        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+        const ssLines = []
+        for (const l of lines) {
+          const pid = l.product_id || l.productId
+          const prodRes = await query('SELECT name, selectsoft_cod, code FROM products WHERE id = @id', { id: pid })
+          const prod = prodRes.recordset[0]
+          ssLines.push({
+            cod_intern: prod?.selectsoft_cod || prod?.code || pid,
+            denumire: prod?.name || pid,
+            cantitate: String(l.cantitate || l.quantity || 0),
+            pret_vanzare: String(Math.round((l.pretUnitar || l.unit_price || 0) * (1 + TVA) * 100) / 100),
+            k_tva: '21',
+          })
+        }
+        const result = await ss.insertComanda({
+          comanda: {
+            nr_comanda: nr,
+            data_comanda: today,
+            tip_plata: o.payment_type === 'OP' ? 'OP' : 'CRD',
+            sursa: 'PORTAL_GIXEN',
+            valoare_comanda: grossTotal,
+            val_tva: tvaTotal,
+            observatii: `Comandă portal B2B #${nr}`,
+            preturiCuTva: true,
+            produse: ssLines,
+          },
+          client: {
+            date_firma: {
+              denumire: cust.name,
+              cod_fiscal: cust.tax_id || '',
+              tara: 'RO',
+              judet: cust.county || '',
+              localitate: cust.locality || '',
+              adresa: cust.address || '',
+              email: cust.email || '',
+            },
+            date_contact: { nume: cust.name, email: cust.email || '', telefon: cust.phone || '' },
+          },
+        })
+        if (result?.nr_intern) {
+          await query('UPDATE orders SET observations = CONCAT(observations, @note) WHERE id = @id',
+            { id, note: ` [SS:${result.nr_intern}]` })
+        }
+      })().catch(e => console.error('[SELECTSOFT push order]', e.message))
+    }
+
     // Send confirmation email to customer
     const custResult = await query(
       'SELECT u.email FROM users u WHERE u.customer_id = @cid AND u.delegate_type = \'primary\' AND u.status != \'inactive\'',

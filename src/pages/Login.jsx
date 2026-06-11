@@ -5,8 +5,9 @@ import { useStore } from '../StoreContext'
 import { GixenLogo } from '../GixenLogo'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => localStorage.getItem('gixen_remember_email') || '')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(() => !!localStorage.getItem('gixen_remember_email'))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
@@ -17,7 +18,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const result = await login(email, password)
+    const result = await login(email, password, remember)
     if (result.ok) {
       await refreshAll()
       navigate(result.user.role === 'admin' ? '/admin/dashboard' : '/dashboard')
@@ -49,6 +50,11 @@ export default function Login() {
             <input type="password" className="w-full" placeholder="••••••••"
               value={password} onChange={e => setPassword(e.target.value)} required />
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)', cursor: 'pointer', marginBottom: 4, userSelect: 'none' }}>
+            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer' }} />
+            Ține-mă minte
+          </label>
           <button type="submit" className="btn btn-primary w-full"
             style={{ marginTop: 8, padding: '10px 16px', fontSize: 14, justifyContent: 'center' }}
             disabled={loading}>

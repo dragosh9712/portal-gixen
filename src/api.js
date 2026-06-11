@@ -1,12 +1,19 @@
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
-let _token = localStorage.getItem('gixen_token') || null
+let _token = localStorage.getItem('gixen_token') || sessionStorage.getItem('gixen_token') || null
 
-export function setToken(t) {
+// remember=true → localStorage (persistă după închiderea browserului)
+// remember=false → sessionStorage (sesiune doar pe tab-ul curent)
+export function setToken(t, remember = true) {
   _token = t
-  t ? localStorage.setItem('gixen_token', t) : localStorage.removeItem('gixen_token')
+  localStorage.removeItem('gixen_token')
+  sessionStorage.removeItem('gixen_token')
+  if (t) (remember ? localStorage : sessionStorage).setItem('gixen_token', t)
 }
 export function getToken() { return _token }
+
+// Rute publice de auth — un 401 aici NU trebuie să redirecționeze către login
+const PUBLIC_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password']
 
 async function req(method, path, body = null, isFormData = false) {
   const headers = {}
@@ -19,9 +26,11 @@ async function req(method, path, body = null, isFormData = false) {
     body: isFormData ? body : body ? JSON.stringify(body) : undefined,
   })
 
-  if ((res.status === 401 || res.status === 403) && path !== '/api/auth/login') {
+  const isPublicAuth = PUBLIC_AUTH_PATHS.some(p => path === p || path.startsWith(p + '?'))
+  if ((res.status === 401 || res.status === 403) && !isPublicAuth) {
     setToken(null)
     localStorage.removeItem('gixen_user')
+    sessionStorage.removeItem('gixen_user')
     window.location.href = '/login'
     return
   }
@@ -38,6 +47,8 @@ const api = {
     me:       ()                => req('GET',  '/api/auth/me'),
     changePassword: (currentPassword, newPassword) => req('PUT', '/api/auth/change-password', { currentPassword, newPassword }),
     resetPassword: (userId, newPassword) => req('PUT', `/api/auth/reset-password/${userId}`, { newPassword }),
+    forgotPassword:     email              => req('POST', '/api/auth/forgot-password', { email }),
+    resetPasswordToken: (token, newPassword) => req('POST', '/api/auth/reset-password', { token, newPassword }),
   },
   products: {
     list:   (params = {})     => req('GET',  '/api/products?' + new URLSearchParams(params)),
@@ -62,6 +73,14 @@ const api = {
     setCredit:   (id, data)       => req('PUT',  `/api/credit/${id}`, data),
     addDelegate: (id, data)       => req('POST', `/api/customers/${id}/delegate`, data),
     delegates:   id               => req('GET',  `/api/customers/${id}/delegates`),
+    notes:       id               => req('GET',  `/api/customers/${id}/notes`),
+    addNote:     (id, text)       => req('POST', `/api/customers/${id}/notes`, { text }),
+    delNote:     (id, noteId)     => req('DELETE', `/api/customers/${id}/notes/${noteId}`),
+  },
+  selectsoft: {
+    test:          () => req('GET',  '/api/selectsoft/test'),
+    syncProducts:  () => req('POST', '/api/selectsoft/sync-products'),
+    syncCustomers: () => req('POST', '/api/selectsoft/sync-customers'),
   },
   orders: {
     list:      (p = {})        => req('GET',  '/api/orders?' + new URLSearchParams(p)),

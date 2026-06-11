@@ -30,8 +30,17 @@ router.put('/', authenticateToken, requireAdmin, async (req, res) => {
 })
 router.post('/refresh', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const fetch = require('node-fetch')
-    const xml = await (await fetch('https://www.bnr.ro/nbrfxrates.xml', { timeout: 10000 })).text()
+    // fetch global (Node 18+) — node-fetch nu este instalat
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10000)
+    let xml
+    try {
+      const resp = await fetch('https://www.bnr.ro/nbrfxrates.xml', { signal: controller.signal })
+      if (!resp.ok) return res.status(502).json({ error: `BNR a răspuns cu status ${resp.status}` })
+      xml = await resp.text()
+    } finally {
+      clearTimeout(timer)
+    }
     const match = xml.match(/<Rate currency="EUR"[^>]*>([^<]+)</)
     if (!match) return res.status(500).json({ error: 'Nu s-a putut citi cursul BNR din XML' })
     const bnrRate = parseFloat(match[1].trim())

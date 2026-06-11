@@ -5,17 +5,21 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('gixen_user')
+    const saved = localStorage.getItem('gixen_user') || sessionStorage.getItem('gixen_user')
     return saved ? JSON.parse(saved) : null
   })
 
-  async function login(email, password) {
+  async function login(email, password, remember = true) {
     try {
       const data = await api.auth.login(email, password)
-      setToken(data.token)
+      setToken(data.token, remember)
       const userObj = { ...data.user }
       setUser(userObj)
-      localStorage.setItem('gixen_user', JSON.stringify(userObj))
+      localStorage.removeItem('gixen_user')
+      sessionStorage.removeItem('gixen_user')
+      ;(remember ? localStorage : sessionStorage).setItem('gixen_user', JSON.stringify(userObj))
+      if (remember) localStorage.setItem('gixen_remember_email', email)
+      else localStorage.removeItem('gixen_remember_email')
       return { ok: true, user: userObj }
     } catch (err) {
       return { ok: false, error: err.message || 'Email sau parolă incorecte.' }
@@ -26,6 +30,7 @@ export function AuthProvider({ children }) {
     setToken(null)
     setUser(null)
     localStorage.removeItem('gixen_user')
+    sessionStorage.removeItem('gixen_user')
   }
 
   return (

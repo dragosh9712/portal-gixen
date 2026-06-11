@@ -32,25 +32,25 @@ app.use('/api/upload',      require('./routes/upload'))
 app.use('/api/anaf',        require('./routes/anaf'))
 app.use('/api/uom',         require('./routes/uom'))
 app.use('/api/surveys',     require('./routes/surveys'))
+app.use('/api/selectsoft',  require('./routes/selectsoft'))
 
-const distPath = path.join(__dirname, 'dist')
-
-app.use(express.static(distPath))
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'))
-})
-
-// Health check
+// Health check — TREBUIE să fie înainte de catch-all
 app.get('/api/health', async (req, res) => {
   const db = require('./db')
   try {
     const pool = await db.getPool()
-    const result = await pool.request().query('SELECT 1 AS ok')
+    await pool.request().query('SELECT 1 AS ok')
     res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() })
   } catch (err) {
     res.status(500).json({ status: 'error', db: 'disconnected', error: err.message })
   }
+})
+
+// Frontend SPA — static + catch-all (ultimele, după toate rutele API)
+const distPath = path.join(__dirname, 'dist')
+app.use(express.static(distPath))
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'))
 })
 
 

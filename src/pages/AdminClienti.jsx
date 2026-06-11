@@ -31,6 +31,9 @@ export default function AdminClienti() {
   const [creditData, setCreditData] = useState(null)
   const [resetPwModal, setResetPwModal] = useState(null)
   const [resetPwInput, setResetPwInput] = useState('')
+  const [clientNotes, setClientNotes] = useState([])
+  const [newNote, setNewNote] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
 
   const firms = (db.firms || []).filter(f => {
     const matchStatus = filterStatus === 'toate' || f.status === filterStatus
@@ -48,6 +51,9 @@ export default function AdminClienti() {
     setTab('info')
     setCreditEditMode(false)
     setCreditData(null)
+    setClientNotes([])
+    setNewNote('')
+    api.customers.notes(firm.id).then(n => setClientNotes(n || [])).catch(() => {})
     try {
       const cl = await api.customers.credit(firm.id)
       setCreditData(cl)
@@ -122,12 +128,45 @@ export default function AdminClienti() {
     { id: 'livrare', label: `Locații (${(selected?.delivery_locations || []).length + 1})` },
     { id: 'comenzi', label: `Comenzi (${clientOrders.length})` },
     { id: 'survey', label: surveyResult ? '✓ Survey' : 'Survey' },
+    { id: 'notite', label: `📝 Notițe (${clientNotes.length})` },
   ]
+
+  async function handleAddClientNote() {
+    if (!newNote.trim() || !selected) return
+    setNoteSaving(true)
+    try {
+      await api.customers.addNote(selected.id, newNote.trim())
+      const notes = await api.customers.notes(selected.id)
+      setClientNotes(notes || [])
+      setNewNote('')
+      showToast('Notiță salvată!')
+    } catch (err) {
+      showToast(err.message || 'Eroare la salvare', 'error')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
+
+  async function handleDeleteClientNote(noteId) {
+    try {
+      await api.customers.delNote(selected.id, noteId)
+      setClientNotes(prev => prev.filter(n => n.id !== noteId))
+      showToast('Notiță ștearsă')
+    } catch (err) {
+      showToast(err.message || 'Eroare', 'error')
+    }
+  }
 
   return (
     <Layout title="Gestiune clienți" actions={
       <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn btn-secondary btn-sm" onClick={() => showToast('⚡ ' + syncClientsFromSelectSoft().message)}>🔄 Sync SS</button>
+        <button className="btn btn-secondary btn-sm" onClick={async () => {
+          showToast('Sincronizare Selectsoft pornită...')
+          try {
+            const r = await api.selectsoft.syncCustomers()
+            showToast(r.message || 'Sincronizare finalizată', r.ok ? 'success' : 'error')
+          } catch (err) { showToast(err.message || 'Eroare sincronizare', 'error') }
+        }}>🔄 Sync SS</button>
       </div>
     }>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
@@ -209,7 +248,13 @@ export default function AdminClienti() {
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {statusBadge(selected.status)}
                 {!selected.selectsoft_cod_parten && (
-                  <button className="btn btn-secondary btn-sm" onClick={() => showToast('⚡ ' + createClientInSelectSoft(selected.id).message)}>📤 Creează în SS</button>
+                  <button className="btn btn-secondary btn-sm" onClick={async () => {
+                    try {
+                      const r = await api.customers.syncSS(selected.id)
+                      showToast(r.message || (r.ok ? 'Creat în Selectsoft' : 'Eroare'), r.ok ? 'success' : 'error')
+                      if (r.cod_parten) setSelected(prev => ({ ...prev, selectsoft_cod_parten: r.cod_parten }))
+                    } catch (err) { showToast(err.message || 'Eroare Selectsoft', 'error') }
+                  }}>📤 Creează în SS</button>
                 )}
                 <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text3)' }}>×</button>
               </div>
@@ -574,6 +619,42 @@ export default function AdminClienti() {
                       <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => showToast('Email trimis!')}>📧 Trimite reminder</button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ── NOTIȚE ── */}
+              {tab === 'notite' && (
+                <div>
+                  <div className="section-title" style={{ marginBottom: 6 }}>Notițe interne client</div>
+                  <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+                    Preofertări, condiții speciale, observații — vizibile doar pentru admini.
+                  </p>
+
+                  <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border)', marginBottom: 16 }}>
+                    <textarea className="w-full" rows={4} placeholder={'Ex:\nPentru produsul Miramax 4s, 600g\ncost grafică — estimez maxim 1500 lei\ncustodie ambalaj 400kg × 15.5 RON = 6200 RON\npreț produs fără ambalaj: 5.65 lei + TVA'}
+                      value={newNote} onChange={e => setNewNote(e.target.value)}
+                      style={{ resize: 'vertical', fontSize: 13, fontFamily: 'inherit' }} />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                      <button className="btn btn-primary btn-sm" onClick={handleAddClientNote} disabled={noteSaving || !newNote.trim()}>
+                        {noteSaving ? 'Se salvează...' : '+ Adaugă notiță'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {clientNotes.length === 0
+                    ? <div style={{ color: 'var(--text3)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>Nicio notiță încă.</div>
+                    : clientNotes.map(n => (
+                      <div key={n.id} style={{ background: 'var(--white)', borderRadius: 10, padding: 14, marginBottom: 10, border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.6, flex: 1 }}>{n.text}</div>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDeleteClientNote(n.id)} title="Șterge notița">✕</button>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8, borderTop: '1px solid var(--border2)', paddingTop: 6 }}>
+                          {n.created_by || 'Admin'} · {fmtDateTime(n.created_at)}
+                        </div>
+                      </div>
+                    ))
+                  }
                 </div>
               )}
 
