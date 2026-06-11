@@ -81,6 +81,7 @@ const api = {
     test:          () => req('GET',  '/api/selectsoft/test'),
     syncProducts:  () => req('POST', '/api/selectsoft/sync-products'),
     syncCustomers: () => req('POST', '/api/selectsoft/sync-customers'),
+    importHistory: (opts = {}) => req('POST', '/api/selectsoft/import-history', opts),
   },
   orders: {
     list:      (p = {})        => req('GET',  '/api/orders?' + new URLSearchParams(p)),
