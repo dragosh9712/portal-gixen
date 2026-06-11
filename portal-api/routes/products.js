@@ -19,21 +19,45 @@ router.get('/', authenticateToken, async (req, res) => {
     if (req.user.role === 'client' && req.user.customerId) {
       try {
         const clientResult = await query(
-          'SELECT allowed_brands, brand_propriu, vede_gixen FROM customers WHERE id = @cid',
+          'SELECT brand_propriu, vede_gixen, marci_permise_json FROM customers WHERE id = @cid',
           { cid: req.user.customerId }
         )
         const client = clientResult.recordset[0]
         if (client) {
-          const brandsRaw = client.allowed_brands || client.brand_propriu
-          const brands = brandsRaw ? JSON.parse(brandsRaw) : []
-          if (brands.length > 0) {
-            const ph = brands.map((_, i) => `@br${i}`).join(',')
-            brands.forEach((b, i) => { params[`br${i}`] = b })
-            where += ` AND (p.marca IN (${ph}) OR p.brand IN (${ph}))`
+          // Build the set of allowed marca values for this client:
+          // - Always include own brand (brand_propriu) if set
+          // - Include 'Gixen' if vede_gixen = 1 OR client has no brand_propriu (default)
+          // - Include any extra brands from marci_permise_json
+          const allowedMarca = new Set()
+
+          const hasBrandPropriu = !!(client.brand_propriu && client.brand_propriu.trim())
+
+          if (hasBrandPropriu) {
+            allowedMarca.add(client.brand_propriu.trim())
           }
-          // If allowed_brands is empty → client sees all active products (no restriction)
+
+          if (client.vede_gixen || !hasBrandPropriu) {
+            allowedMarca.add('Gixen')
+          }
+
+          try {
+            const extra = client.marci_permise_json ? JSON.parse(client.marci_permise_json) : []
+            if (Array.isArray(extra)) extra.forEach(m => m && allowedMarca.add(m))
+          } catch {}
+
+          if (allowedMarca.size > 0) {
+            const marcaArr = [...allowedMarca]
+            const ph = marcaArr.map((_, i) => `@bm${i}`).join(',')
+            marcaArr.forEach((m, i) => { params[`bm${i}`] = m })
+            // Client sees products matching allowed marca OR products belonging to their firm
+            where += ` AND (p.marca IN (${ph}) OR p.private_brand_firm_id = @clientFirmId)`
+            params.clientFirmId = req.user.customerId
+          }
         }
-      } catch { /* if query fails, show all active products */ }
+      } catch (e) {
+        console.error('Product filter error:', e.message)
+        // On error, fall through and show all active products
+      }
     }
 
     const result = await query(`
