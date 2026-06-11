@@ -1,0 +1,21 @@
+# .htaccess pentru Apache/cPanel — portal.gixen.ro
+# React Router SPA support
+
+Options -MultiViews
+RewriteEngine On
+RewriteBase /
+
+# Redirecționează tot spre index.html (React Router)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [QSA,L]
+
+# Cache pentru assets statice
+<FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|webp)$">
+  ExpiresActive on
+  ExpiresDefault "access plus 1 year"
+</FilesMatch>
+
+# Securitate
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff"
