@@ -190,10 +190,9 @@ router.post('/forgot-password', async (req, res) => {
       )`)
 
     const token = crypto.randomBytes(32).toString('hex')
-    const expires = new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
     await query(
-      'INSERT INTO password_reset_tokens (token, user_id, expires_at, used) VALUES (@token, @uid, @exp, 0)',
-      { token, uid: result.recordset[0].id, exp: expires }
+      'INSERT INTO password_reset_tokens (token, user_id, expires_at, used) VALUES (@token, @uid, DATEADD(HOUR, 2, GETUTCDATE()), 0)',
+      { token, uid: result.recordset[0].id }
     )
 
     const appUrl = process.env.APP_URL || 'https://portal.gixen.ro'
@@ -214,7 +213,7 @@ router.post('/reset-password', async (req, res) => {
     if (newPassword.length < 6) return res.status(400).json({ error: 'Parola trebuie să aibă minim 6 caractere' })
 
     const result = await query(
-      'SELECT * FROM password_reset_tokens WHERE token=@token AND used=0 AND expires_at > SYSDATETIME()',
+      'SELECT * FROM password_reset_tokens WHERE token=@token AND used=0 AND expires_at > GETUTCDATE()',
       { token }
     )
     if (!result.recordset[0]) return res.status(400).json({ error: 'Link invalid sau expirat' })

@@ -252,7 +252,7 @@ export default function AdminClienti() {
                     <td>{orderCount}</td>
                     <td>
                       {firm.selectsoft_cod_parten
-                        ? <span style={{ fontSize: 11, color: 'var(--green-text)' }}>✓</span>
+                        ? <span style={{ fontSize: 11, color: 'var(--green-text)', fontFamily: 'monospace' }}>#{firm.selectsoft_cod_parten}</span>
                         : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
                     </td>
                     <td>{statusBadge(firm.status)}</td>
@@ -282,6 +282,7 @@ export default function AdminClienti() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>{selected.cui} · {agents.find(a => a.id === selected.agent_id)?.name || '—'}</div>
+                {selected.selectsoft_cod_parten && <div style={{ fontSize: 11, color: 'var(--green-text)' }}>SS #{selected.selectsoft_cod_parten}</div>}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {statusBadge(selected.status)}

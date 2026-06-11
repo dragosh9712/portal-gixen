@@ -331,7 +331,8 @@ export default function AdminComisioane() {
               <div className="section-title" style={{ marginBottom: 10 }}>Preview calcul preț</div>
               <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>Baza exemplu: 10.00 RON/rolă</div>
               {(() => {
-                const calc = calcPretDemo(form.agent_id, form.product_id || null, form.customer_id || null, 10)
+                const rate = parseFloat(form.rate) || 0
+                const calc = { rate, pret: Math.round(10 * (1 + rate / 100) * 100) / 100 }
                 return (
                   <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '10px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>

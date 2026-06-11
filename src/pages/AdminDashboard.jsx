@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import Layout from '../Layout'
@@ -12,6 +12,23 @@ export default function AdminDashboard() {
   const { db, updateOrderStatus, refreshAll } = useStore()
   const [bnrLoading, setBnrLoading] = useState(false)
   const [bnrMsg, setBnrMsg] = useState(null)
+
+  // Auto-refresh BNR zilnic la 00:00
+  useEffect(() => {
+    const msUntilMidnight = () => {
+      const now = new Date()
+      const midnight = new Date(now)
+      midnight.setDate(now.getDate() + 1)
+      midnight.setHours(0, 0, 1, 0)
+      return midnight - now
+    }
+    let id
+    const scheduleNext = () => {
+      id = setTimeout(() => { handleRefreshBNR(); scheduleNext() }, msUntilMidnight())
+    }
+    scheduleNext()
+    return () => clearTimeout(id)
+  }, [])
 
   async function handleRefreshBNR() {
     setBnrLoading(true); setBnrMsg(null)
@@ -92,6 +109,7 @@ export default function AdminDashboard() {
             onClick={handleRefreshBNR} disabled={bnrLoading}>
             {bnrLoading ? '⏳ Se actualizează...' : '🔄 Actualizează BNR'}
           </button>
+          {db.exchange?.updated_at && <div className="kpi-sub" style={{ marginTop: 2, fontSize: 10 }}>Actualizat: {new Date(db.exchange.updated_at).toLocaleString('ro-RO')}</div>}
           {bnrMsg && <div className="kpi-sub" style={{ marginTop: 4 }}>{bnrMsg}</div>}
         </div>
       </div>
