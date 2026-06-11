@@ -41,7 +41,9 @@ export default function AdminClienti() {
     const matchStatus = filterStatus === 'toate' || f.status === filterStatus
     const matchAgent = filterAgent === 'toate' || f.agent_id === filterAgent
     const q = search.toLowerCase()
-    return matchStatus && matchAgent && (!q || f.name.toLowerCase().includes(q) || (f.cui || '').includes(q) || (f.email || '').toLowerCase().includes(q))
+    const cui = String(f.cui || f.tax_id || '').toLowerCase()
+    const ss  = String(f.selectsoft_cod_parten || '')
+    return matchStatus && matchAgent && (!q || (f.name || '').toLowerCase().includes(q) || cui.includes(q) || ss.includes(q) || (f.email || '').toLowerCase().includes(q))
   })
 
   const agents = db.agents || []
@@ -242,7 +244,7 @@ export default function AdminClienti() {
                   <tr key={firm.id} style={{ cursor: 'pointer' }} onClick={() => openClient(firm)}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{firm.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{firm.cui} · {firm.email}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{firm.cui || firm.tax_id} · {firm.email}</div>
                     </td>
                     <td style={{ fontSize: 12 }}>{agent?.name || '—'}</td>
                     <td>
@@ -281,7 +283,7 @@ export default function AdminClienti() {
             <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text3)' }}>{selected.cui} · {agents.find(a => a.id === selected.agent_id)?.name || '—'}</div>
+                <div style={{ fontSize: 12, color: 'var(--text3)' }}>{selected.cui || selected.tax_id} · {agents.find(a => a.id === selected.agent_id)?.name || '—'}</div>
                 {selected.selectsoft_cod_parten && <div style={{ fontSize: 11, color: 'var(--green-text)' }}>SS #{selected.selectsoft_cod_parten}</div>}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

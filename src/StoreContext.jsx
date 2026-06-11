@@ -24,7 +24,7 @@ export function StoreProvider({ children }) {
         await Promise.allSettled([
           api.orders.list({ limit: 200 }),
           api.customers.list(),
-          api.products.list({ active_only: true }),
+          api.products.list({ active_only: false }),
           api.promotions.list(),
           api.agents.list(),
           api.locations.list(),
@@ -84,7 +84,7 @@ export function StoreProvider({ children }) {
 
   const refreshProducts = useCallback(async () => {
     try {
-      const products = await api.products.list({ active_only: true })
+      const products = await api.products.list({ active_only: false })
       setDb(prev => ({ ...prev, products: products || [] }))
     // eslint-disable-next-line no-empty
     } catch { }

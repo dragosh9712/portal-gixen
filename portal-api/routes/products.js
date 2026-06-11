@@ -20,7 +20,8 @@ router.get('/', authenticateToken, async (req, res) => {
     await ensurePrivateBrandColumn()
     const { marca, categorie, active_only, search } = req.query
     let where = 'WHERE 1=1'
-    if (active_only !== 'false') where += ' AND p.is_active = 1'
+    // Clients never see inactive products; admins control via active_only param
+    if (req.user.role === 'client' || active_only !== 'false') where += ' AND p.is_active = 1'
     if (marca)    where += ' AND p.marca = @marca'
     if (categorie) where += ' AND p.categorie = @categorie'
     if (search)   where += ' AND (p.name LIKE @search OR p.code LIKE @search OR p.brand LIKE @search)'

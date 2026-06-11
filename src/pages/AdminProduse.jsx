@@ -58,7 +58,7 @@ function OwnerPickerModal({ firms, onSelect, onClose }) {
   const [q, setQ] = useState('')
   const filtered = (firms || []).filter(f => {
     const s = q.toLowerCase()
-    return !s || (f.name || '').toLowerCase().includes(s) || (f.cui || '').toLowerCase().includes(s)
+    return !s || (f.name || '').toLowerCase().includes(s) || String(f.cui || f.tax_id || '').toLowerCase().includes(s)
   })
   return (
     <div className="modal-overlay" style={{ zIndex: 60 }} onClick={onClose}>
@@ -75,7 +75,7 @@ function OwnerPickerModal({ firms, onSelect, onClose }) {
             <div key={f.id} onClick={() => onSelect(f)}
               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontWeight: 500, fontSize: 13 }}>{f.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{f.cui || '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{f.cui || f.tax_id || '—'}</div>
             </div>
           ))}
           {filtered.length === 0 && <div style={{ padding: 16, fontSize: 12, color: 'var(--text3)', textAlign: 'center' }}>Niciun client găsit</div>}
@@ -124,7 +124,7 @@ export default function AdminProduse() {
     const matchTip = filterTip === 'toate' || p.product_type === filterTip
     const matchMarca = filterMarca === 'toate' || p.marca === filterMarca
     const q = search.toLowerCase()
-    const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.cod || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q) || (p.selectsoft_cod || '').includes(q)
+    const matchSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.cod || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q) || (p.selectsoft_cod || '').includes(q)
     return matchActiv && matchTip && matchSearch && matchMarca
   })
 
