@@ -36,7 +36,6 @@ export default function AdminOferte() {
       id: 'of' + now,
       nr: 'OF-' + new Date(now).getFullYear() + '-' + String(rand),
       dataEmitere: new Date(now).toISOString().split('T')[0],
-      dataExpirare: new Date(now + (offer.valabilitate || 15) * 86400000).toISOString().split('T')[0],
       status: 'emisa',
       firmId: '',
       clientName: '',
@@ -86,7 +85,7 @@ export default function AdminOferte() {
         @media print { body { margin: 0; } }
       </style></head><body>
       <h1>GIXEN — Ofertă comercială</h1>
-      <div class="meta">Nr. ${offer.nr} · Emisă: ${offer.dataEmitere || ''} · Valabilă până la: ${offer.dataExpirare || ''}</div>
+      <div class="meta">Nr. ${offer.nr} · Emisă: ${offer.dataEmitere || ''}</div>
       <div class="meta" style="margin-top:8px"><b>Client:</b> ${offer.clientName || '—'}</div>
       <table>
         <thead><tr><th>Produs</th><th style="text-align:center">Cantitate</th><th style="text-align:right">Preț/rolă fără TVA</th><th style="text-align:right">Total</th></tr></thead>
@@ -174,7 +173,6 @@ export default function AdminOferte() {
                   <th>Nr. ofertă</th>
                   <th>Client</th>
                   <th>Data emiterii</th>
-                  <th>Valabilă până la</th>
                   <th>Total net</th>
                   <th>Total cu TVA</th>
                   <th>Status</th>
@@ -189,9 +187,6 @@ export default function AdminOferte() {
                       <td><CopyButton text={offer.nr}><b>{offer.nr}</b></CopyButton></td>
                       <td>{offer.clientName || '—'}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(offer.dataEmitere)}</td>
-                      <td style={{ fontSize: 12, color: offer.dataExpirare < new Date().toISOString().split('T')[0] ? 'var(--red-text)' : 'var(--text2)' }}>
-                        {fmtDate(offer.dataExpirare)}
-                      </td>
                       <td><b>{lei(offer.totalNet || 0)}</b></td>
                       <td>{lei(offer.totalCuTva || 0)}</td>
                       <td><span className={`badge ${sc.cls}`}>{sc.label}</span></td>
@@ -232,7 +227,6 @@ export default function AdminOferte() {
               <div><div className="text-muted">Client</div><b>{selected.clientName || '—'}</b></div>
               <div><div className="text-muted">Status</div><span className={`badge ${STATUS_CONFIG[selected.status]?.cls}`}>{STATUS_CONFIG[selected.status]?.label}</span></div>
               <div><div className="text-muted">Data emiterii</div>{fmtDate(selected.dataEmitere)}</div>
-              <div><div className="text-muted">Valabilă până la</div>{fmtDate(selected.dataExpirare)}</div>
             </div>
 
             <div className="section-title" style={{ marginBottom: 8 }}>Linii ofertă</div>

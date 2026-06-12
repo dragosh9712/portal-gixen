@@ -19,10 +19,6 @@ const GIXEN = {
 function todayFmt() {
   return new Date().toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
-function addDaysFmt(n) {
-  const d = new Date(); d.setDate(d.getDate() + n)
-  return d.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
 function genNr() {
   const n = new Date()
   return `OF-${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}${String(Math.floor(Math.random() * 900) + 100)}`
@@ -40,7 +36,6 @@ export default function AdminOferta() {
   const [step, setStep] = useState(1)
   const [selectedFirmId, setSelectedFirmId] = useState('')
   const [selectedProducts, setSelectedProducts] = useState(presetProducts)
-  const [valabilitate, setValabilitate] = useState(15)
   const [observatii, setObservatii] = useState('')
   const [offerNr] = useState(genNr())
   const [saved, setSaved] = useState(false)
@@ -145,8 +140,7 @@ export default function AdminOferta() {
       agent_id: tFirm?.agent_id || null,
       created_by_user_id: user.id, status: 'emisa',
       dataEmitere: new Date().toISOString().split('T')[0],
-      dataExpirare: new Date(Date.now() + valabilitate * 86400000).toISOString().split('T')[0],
-      valabilitate, products_selected: selectedProducts,
+      products_selected: selectedProducts,
       prices_per_uom: calc.pricesPerUom,
       ...totals,
       currency: tFirm?.currency || 'RON',
@@ -156,69 +150,32 @@ export default function AdminOferta() {
     return true
   }
 
-  // Print curat: deschide o fereastră nouă doar cu oferta (nu printează tot layout-ul admin)
+  // Print: CSS @media print afișează DOAR .oferta-preview → print identic cu preview-ul
   function printOferta() {
     if (!ofertaCalc) return
-    const t = buildOfferData(ofertaCalc)
-    const rows = t.linii.map(l => {
-      const prod = (db.products || []).find(p => p.id === l.productId)
-      const disc = t.discountLinii.find(d => d.refLinie === t.linii.indexOf(l))
-      const hasPromo = l.total < l.pretUnitar
-      return `<tr>
-        <td>${prod?.name || l.productId}<div style="color:#94a3b8;font-size:10px">${prod?.cod || ''}</div></td>
-        <td style="text-align:right">${l.pretUnitar.toFixed(2)} RON</td>
-        <td style="font-size:11px;color:#15803d">${disc ? disc.eticheta : '—'}</td>
-        <td style="text-align:right;font-weight:700;color:${hasPromo ? '#16a34a' : '#0f172a'}">${l.total.toFixed(2)} RON</td>
-        <td style="text-align:right;color:#64748b">${(l.total * TVA_RATE).toFixed(2)} RON</td>
-      </tr>`
-    }).join('')
-    const buyer = selectedFirm
-      ? `<b>${selectedFirm.name}</b><br>CUI: ${selectedFirm.cui || selectedFirm.tax_id || '—'}<br>${selectedFirm.adresa || selectedFirm.address || ''}`
-      : 'Ofertă generală'
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${offerNr}</title>
-      <style>
-        body { font-family: Arial, sans-serif; max-width: 820px; margin: 24px auto; color: #0f172a; font-size: 13px; }
-        .hd { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #21376c; padding-bottom:16px; margin-bottom:16px; }
-        h1 { font-size: 22px; color: #21376c; margin: 0 0 4px; }
-        .meta { color: #64748b; font-size: 12px; line-height: 1.6; }
-        .parties { display:flex; justify-content:space-between; gap:32px; margin-bottom:20px; font-size:12px; line-height:1.6; }
-        .lbl { font-size:9px; font-weight:700; color:#94a3b8; letter-spacing:.1em; text-transform:uppercase; margin-bottom:4px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th { background: #21376c; color: #fff; padding: 8px 10px; text-align: left; font-size: 10px; }
-        td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
-        .totals { margin-top: 16px; margin-left: auto; width: 300px; }
-        .totals div { display: flex; justify-content: space-between; padding: 4px 0; }
-        .totals .big { font-size: 16px; font-weight: 700; border-top: 2px solid #21376c; padding-top: 8px; }
-        @media print { body { margin: 0; } }
-      </style></head><body>
-      <div class="hd">
-        <div><h1>GIXEN</h1><div class="meta">Ofertă comercială</div></div>
-        <div style="text-align:right"><div style="font-weight:800;font-size:18px">${offerNr}</div>
-          <div class="meta">Data emiterii: ${todayFmt()}</div>
-          <div class="meta" style="color:#b45309">Valabilă ${valabilitate} zile · până la ${addDaysFmt(valabilitate)}</div></div>
-      </div>
-      <div class="parties">
-        <div><div class="lbl">Furnizor</div><b>${GIXEN.name}</b><br>CUI: ${GIXEN.cui}<br>${GIXEN.adresa}<br>${GIXEN.email} · ${GIXEN.telefon}</div>
-        <div style="text-align:right"><div class="lbl">Cumpărător</div>${buyer}</div>
-      </div>
-      <table>
-        <thead><tr><th>Produs</th><th style="text-align:right">Preț/rolă</th><th>Promoții</th><th style="text-align:right">Preț final/rolă</th><th style="text-align:right">TVA ${TVA_LABEL}</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div class="totals">
-        <div><span>Total brut</span><span>${t.totalBrut.toFixed(2)} RON</span></div>
-        ${t.totalDiscount < 0 ? `<div style="color:#16a34a"><span>Reduceri</span><span>${t.totalDiscount.toFixed(2)} RON</span></div>` : ''}
-        <div><span>Total net (fără TVA)</span><span>${t.totalNet.toFixed(2)} RON</span></div>
-        <div><span>TVA ${TVA_LABEL}</span><span>${t.tva.toFixed(2)} RON</span></div>
-        <div class="big"><span>Total cu TVA</span><span>${t.totalCuTva.toFixed(2)} RON</span></div>
-      </div>
-      ${observatii ? `<p class="meta" style="margin-top:20px"><b>Observații:</b> ${observatii}</p>` : ''}
-      <p class="meta" style="margin-top:16px">Prețurile sunt exprimate per rolă, în RON.</p>
-      <script>window.onload=()=>setTimeout(()=>window.print(),300)</` + `script>
-      </body></html>`
-    const w = window.open('', '_blank')
-    if (w) { w.document.write(html); w.document.close() }
-    else alert('Permite ferestrele pop-up pentru a genera PDF-ul.')
+    window.print()
+  }
+
+  // Descriere lizibilă a condițiilor + acțiunii unei promoții (pentru secțiunea din ofertă)
+  function describeRule(ruleLite) {
+    const rule = (db.promotionRules || []).find(r => r.id === ruleLite.id) || ruleLite
+    const prodName = id => (db.products || []).find(p => p.id === id)?.name || id
+    const conditii = (rule.conditii || []).map(c => {
+      switch (c.tip) {
+        case 'produs_in_cos':              return `minim ${c.cantMin || 1} role din ${prodName(c.productId)}`
+        case 'cantitate_totala_categorie': return `minim ${c.cantMin || 1} role din categoria ${c.categorie || '—'}`
+        case 'valoare_cos':                return `valoare coș minim ${c.valoareMin || 0} RON`
+        case 'grup_client':                return `client din grupul ${c.grup || '—'}`
+        case 'marca_in_cos':               return `minim ${c.cantMin || 1} role din marca ${c.marca || '—'}`
+        default:                           return c.tip || ''
+      }
+    }).filter(Boolean)
+    const a = rule.actiune || {}
+    let beneficiu = ''
+    if (a.tip === 'discount_procent_linie' || a.tip === 'discount_procent_total') beneficiu = `reducere ${a.valoare}%`
+    else if (a.tip === 'discount_valoric') beneficiu = `reducere ${a.valoare} RON`
+    else if (a.tip === 'produs_gratuit') beneficiu = `${a.cantitateGratuita || 1} buc gratuit${a.productIdTinta ? ` din ${prodName(a.productIdTinta)}` : ''}`
+    return { nume: rule.name || rule.eticheta || 'Promoție', eticheta: rule.eticheta || a.eticheta, conditii, beneficiu, combinabil: rule.combinabil !== false }
   }
 
   const totalFaraPromo = ofertaCalc?.scenarios?.[0]?.totals || {}
@@ -331,7 +288,7 @@ export default function AdminOferta() {
       {step === 2 && ofertaCalc && (
         <div>
           {/* Toolbar */}
-          <div className="card" style={{ marginBottom: 16, padding: '10px 16px' }}>
+          <div className="card no-print" style={{ marginBottom: 16, padding: '10px 16px' }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setStep(1)}>← Modifică</button>
               <button className="btn btn-secondary btn-sm" onClick={printOferta}>🖨 Print / PDF</button>
@@ -343,12 +300,6 @@ export default function AdminOferta() {
                 : <button className="btn btn-success btn-sm" onClick={() => navigate('/admin/oferte')}>✓ Salvată → Oferte</button>
               }
               <button className="btn btn-secondary btn-sm" onClick={() => setShowCopy(v => !v)}>📋 Copiază pentru alt client</button>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <label style={{ fontSize: 12, marginBottom: 0 }}>Valabilitate:</label>
-                <select style={{ fontSize: 12, padding: '4px 8px' }} value={valabilitate} onChange={e => setValabilitate(parseInt(e.target.value))}>
-                  {[7, 15, 30, 60].map(v => <option key={v} value={v}>{v} zile</option>)}
-                </select>
-              </div>
             </div>
 
             {showCopy && (
@@ -389,9 +340,6 @@ export default function AdminOferta() {
               <div style={{ textAlign: 'right' }}>
                 <div style={{ color: '#f1f5f9', fontWeight: 800, fontSize: 18, letterSpacing: '0.02em' }}>{offerNr}</div>
                 <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4 }}>Data emiterii: {todayFmt()}</div>
-                <div style={{ color: '#fbbf24', fontSize: 11, marginTop: 2 }}>
-                  Valabilă {valabilitate} zile · până la {addDaysFmt(valabilitate)}
-                </div>
               </div>
             </div>
             <div style={{ height: 3, background: 'linear-gradient(90deg, #1d4ed8, #3b82f6, #1d4ed8)' }} />
@@ -441,7 +389,6 @@ export default function AdminOferta() {
                   <tr style={{ background: '#0f172a' }}>
                     <th style={{ padding: '11px 16px', textAlign: 'left', fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>PRODUS</th>
                     <th style={{ padding: '11px 14px', textAlign: 'right', fontSize: 10, color: '#e2e8f0', fontWeight: 700 }}>PREȚ/ROLĂ</th>
-                    <th style={{ padding: '11px 14px', textAlign: 'left', fontSize: 10, color: '#e2e8f0', fontWeight: 700 }}>PROMOȚII ACTIVE</th>
                     <th style={{ padding: '11px 14px', textAlign: 'right', fontSize: 10, color: '#fbbf24', fontWeight: 700 }}>PREȚ FINAL/ROLĂ</th>
                     <th style={{ padding: '11px 14px', textAlign: 'right', fontSize: 10, color: '#94a3b8', fontWeight: 700 }}>TVA {TVA_LABEL}</th>
                     {isEur && <th style={{ padding: '11px 14px', textAlign: 'right', fontSize: 10, color: '#fcd34d', fontWeight: 700 }}>EUR/ROLĂ</th>}
@@ -487,28 +434,6 @@ export default function AdminOferta() {
                             {fmtVal(pretBaza)}
                           </div>
                         </td>
-                        <td style={{ padding: '12px 14px', verticalAlign: 'top' }}>
-                          {promoAplic.length === 0
-                            ? <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>
-                            : <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              {promoAplic.map(rule => {
-                                const orig = (db.promotionRules || []).find(r => r.id === rule.id)
-                                const a = orig?.actiune
-                                let detail = ''
-                                if (a?.tip === 'discount_procent_linie' || a?.tip === 'discount_procent_total') detail = `−${a.valoare}%`
-                                else if (a?.tip === 'discount_valoric') detail = `−${a.valoare} RON`
-                                else if (a?.tip === 'produs_gratuit') detail = `Cumperi ${a.cantitateMinima || '?'} → ${a.cantitateGratuita || 1} gratuit`
-                                return (
-                                  <div key={rule.id}>
-                                    <span style={{ fontSize: 10, padding: '2px 7px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 4, fontWeight: 600 }}>
-                                      {rule.eticheta || rule.name}{detail ? ` (${detail})` : ''}
-                                    </span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          }
-                        </td>
                         <td style={{ padding: '12px 14px', textAlign: 'right', verticalAlign: 'top' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: hasPromo ? '#16a34a' : '#1d4ed8' }}>{fmtVal(pretFinal)}</div>
                           {hasPromo && <div style={{ fontSize: 9, color: '#16a34a', marginTop: 1 }}>−{fmtVal(pretBaza - pretFinal)}</div>}
@@ -531,7 +456,6 @@ export default function AdminOferta() {
                     <td style={{ padding: '12px 14px', textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>
                       {fmtVal(totalFaraPromo.ROLA)}
                     </td>
-                    <td />
                     <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                       {(() => {
                         const bestTotals = (ofertaCalc.scenarios.find(s => s.id === 'cumul_toate') ||
@@ -545,13 +469,13 @@ export default function AdminOferta() {
                   </tr>
                   <tr style={{ background: '#17304d' }}>
                     <td style={{ padding: '8px 16px', fontSize: 11, color: '#94a3b8' }}>TVA {TVA_LABEL}</td>
-                    <td colSpan={isEur ? 5 : 4} style={{ padding: '8px 14px', textAlign: 'right', fontSize: 12, color: '#94a3b8' }}>
+                    <td colSpan={isEur ? 4 : 3} style={{ padding: '8px 14px', textAlign: 'right', fontSize: 12, color: '#94a3b8' }}>
                       {fmtVal(Math.round((totalFaraPromo.ROLA || 0) * TVA_RATE * 100) / 100)}
                     </td>
                   </tr>
                   <tr style={{ background: '#0f2035', borderTop: '2px solid #fbbf24' }}>
                     <td style={{ padding: '11px 16px', fontSize: 12, fontWeight: 800, color: '#fbbf24' }}>TOTAL CU TVA ({TVA_LABEL})</td>
-                    <td colSpan={isEur ? 5 : 4} style={{ padding: '11px 14px', textAlign: 'right' }}>
+                    <td colSpan={isEur ? 4 : 3} style={{ padding: '11px 14px', textAlign: 'right' }}>
                       <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24' }}>
                         {fmtVal(Math.round((totalFaraPromo.ROLA || 0) * (1 + TVA_RATE) * 100) / 100)}
                       </div>
@@ -560,10 +484,38 @@ export default function AdminOferta() {
                 </tfoot>
               </table>
 
+              {/* ── PROMOȚII APLICABILE (cu condiții) ── */}
+              {ofertaCalc.eligibleRules.length > 0 && (
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#15803d', letterSpacing: '0.12em', marginBottom: 10, textTransform: 'uppercase' }}>
+                    Promoții aplicabile
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {ofertaCalc.eligibleRules.map(rl => {
+                      const d = describeRule(rl)
+                      return (
+                        <div key={rl.id} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '10px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{d.nume}</span>
+                            {d.eticheta && d.eticheta !== d.nume && <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 12, background: '#16a34a', color: '#fff', fontWeight: 600 }}>{d.eticheta}</span>}
+                            {d.combinabil && <span style={{ fontSize: 9, color: '#15803d', border: '1px solid #16a34a', borderRadius: 10, padding: '0 6px' }}>cumulabilă</span>}
+                          </div>
+                          {d.beneficiu && <div style={{ fontSize: 12, color: '#166534', marginBottom: d.conditii.length ? 4 : 0 }}>🎁 Beneficiu: <strong>{d.beneficiu}</strong></div>}
+                          {d.conditii.length > 0 && (
+                            <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
+                              Condiții: {d.conditii.join(' și ')}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* ── CONDIȚII ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '16px 0', marginTop: 28 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '16px 0', marginTop: 28 }}>
                 {[
-                  ['⏰', 'Valabilitate', `${valabilitate} zile (expiră ${addDaysFmt(valabilitate)})`],
                   ['🚚', 'Livrare', 'La sediul / punctul de livrare indicat de cumpărător'],
                   ['💳', 'Plată', 'Ordin de plată (OP) conform contract'],
                 ].map(([icon, title, desc]) => (
@@ -598,7 +550,7 @@ export default function AdminOferta() {
                 {GIXEN.name} · CUI {GIXEN.cui} · Reg. Com. {GIXEN.regCom} · {GIXEN.adresa} · {GIXEN.email} · {GIXEN.telefon}
               </div>
               <div style={{ fontSize: 9, color: '#334155', marginTop: 2 }}>
-                Prezenta ofertă este valabilă {valabilitate} zile de la data emiterii. Prețurile sunt exprimate fără TVA.
+                Prețurile sunt exprimate per rolă, fără TVA.
               </div>
             </div>
           </div>

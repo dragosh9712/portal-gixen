@@ -246,3 +246,18 @@ tbody tr.selected td { background:var(--blue-bg); }
 /* Bulk actions bar */
 .bulk-bar { position:sticky; top:0; z-index:20; background:var(--blue); color:#fff; padding:10px 20px; display:flex; align-items:center; gap:12px; border-radius:var(--radius-sm); margin-bottom:12px; animation:slideUp 0.2s ease; }
 .bulk-bar span { font-size:13px; font-weight:500; flex:1; }
+
+/* ── Print ofertă: arată DOAR oferta, identic cu preview-ul ── */
+@media print {
+  body * { visibility: hidden; }
+  .oferta-preview, .oferta-preview * { visibility: visible; }
+  .oferta-preview {
+    position: absolute; left: 0; top: 0; width: 100%;
+    max-width: none !important; margin: 0 !important;
+    box-shadow: none !important; border-radius: 0 !important;
+  }
+  .no-print { display: none !important; }
+  /* Păstrează culorile/fundalurile închise la printare */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  @page { margin: 12mm; }
+}
