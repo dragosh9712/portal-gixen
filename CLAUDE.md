@@ -116,6 +116,7 @@ Tabelele principale. Schema se auto-crează/extinde la pornire (`server.js` → 
 | `surveys` / `survey_results` | Survey onboarding |
 | `exchange_rates` | Curs EUR/RON (sync BNR zilnic 00:05 Romania) |
 | `promo_banners` | Bannere promo la login (F4) |
+| `audit_log` | **Audit complet** — orice POST/PUT/DELETE (cine, ce, payload fără parole, status, IP) + job-uri sistem (`JOB`) + login-uri (`LOGIN`). Doar în SQL, fără UI. Implementat în `portal-api/auditLog.js` (middleware montat în server.js înaintea rutelor) |
 
 **Coloane adăugate dinamic** (IF NOT EXISTS la pornire în `runMigrations()`):
 - `orders`: `proforma_nr_intern`, `payment_status`, `payment_confirmed_at`, `ss_nr_intern`, `discount_lines_json`
@@ -298,4 +299,6 @@ SELECTSOFT_PUSH_ORDERS=false         # true = trimite automat comenzile în SS
 - [x] EUR complet: clienți cu `currency=EUR` văd prețuri în EUR în Produse, Favorite, Coș, ComenzileMele, Dashboard, Rapoarte (curs `db.exchange.rate`, RON afișat secundar)
 - [x] Oferte emise: buton 🖨 Salvează PDF (fereastră print → Save as PDF) + ✎ Editează pt. alt client (preîncarcă produsele în generator)
 - [x] Survey: trigger nou `until_completed` (popup la fiecare vizită până completează); buton reminder trimite email real (`POST /api/customers/:id/survey-reminder`, logat în email_log)
+- [x] Audit log: tabela `audit_log` + middleware în `auditLog.js` — loghează toate mutațiile API (admin/client), login-urile și job-urile de sistem (curs BNR, monitor plăți). Interogare: `SELECT TOP 100 * FROM audit_log ORDER BY occurred_at DESC`
+- [x] Oferte: DELETE real în backend (`DELETE /api/offers/:id`, doar admin); fix `created_by` lipsă pe tabele vechi (auto-ALTER); fără valabilitate; promoții cu condiții sub produse; print identic cu preview + imagini produse
 - [x] HTTPS: suport nativ în server.js — setezi `SSL_KEY_PATH`/`SSL_CERT_PATH`/`HTTPS_PORT` în .env; HTTP redirecționează automat la HTTPS. Cert self-signed: `openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes -subj "/CN=portal.gixen.ro"`

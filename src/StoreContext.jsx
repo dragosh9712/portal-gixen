@@ -427,7 +427,8 @@ export function StoreProvider({ children }) {
     setDb(prev => ({ ...prev, offers: prev.offers.map(o => o.id === offerId ? { ...o, status } : o) }))
   }
 
-  function deleteOffer(offerId) {
+  async function deleteOffer(offerId) {
+    await api.offers.remove(offerId)
     setDb(prev => ({ ...prev, offers: prev.offers.filter(o => o.id !== offerId) }))
   }
 

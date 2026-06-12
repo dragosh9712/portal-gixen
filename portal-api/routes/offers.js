@@ -15,6 +15,11 @@ async function ensureTable() {
       created_at  DATETIME2 DEFAULT SYSDATETIME(),
       updated_at  DATETIME2 DEFAULT SYSDATETIME()
     )`)
+  // Tabela poate exista dintr-o versiune veche fără toate coloanele
+  await query(`IF COL_LENGTH('offers','created_by') IS NULL ALTER TABLE offers ADD created_by NVARCHAR(255)`)
+  await query(`IF COL_LENGTH('offers','data_json') IS NULL ALTER TABLE offers ADD data_json NVARCHAR(MAX)`)
+  await query(`IF COL_LENGTH('offers','title') IS NULL ALTER TABLE offers ADD title NVARCHAR(255)`)
+  await query(`IF COL_LENGTH('offers','updated_at') IS NULL ALTER TABLE offers ADD updated_at DATETIME2 DEFAULT SYSDATETIME()`)
 }
 
 // GET /api/offers
@@ -63,6 +68,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
       data: JSON.stringify(o),
     })
     res.json({ message: 'Ofertă actualizată' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// DELETE /api/offers/:id
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Doar adminii pot șterge oferte' })
+    await ensureTable()
+    await query('DELETE FROM offers WHERE id = @id', { id: req.params.id })
+    res.json({ message: 'Ofertă ștearsă' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

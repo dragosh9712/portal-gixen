@@ -50,11 +50,16 @@ export default function AdminOferte() {
     showToast(`Status actualizat: ${STATUS_CONFIG[status]?.label}`)
   }
 
-  function handleDelete(offerId) {
-    deleteOffer(offerId)
-    setConfirmDelete(null)
-    setSelected(null)
-    showToast('Ofertă ștearsă.')
+  async function handleDelete(offerId) {
+    try {
+      await deleteOffer(offerId)
+      setConfirmDelete(null)
+      setSelected(null)
+      showToast('Ofertă ștearsă.')
+    } catch (err) {
+      setConfirmDelete(null)
+      showToast('Eroare la ștergere: ' + (err.message || err))
+    }
   }
 
   // Deschide oferta într-o fereastră de print → utilizatorul salvează ca PDF

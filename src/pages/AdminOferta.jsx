@@ -425,9 +425,18 @@ export default function AdminOferta() {
                     const hasPromo = promoAplic.length > 0 && pretFinal < pretBaza
                     return (
                       <tr key={p.id} style={{ background: rowIdx % 2 === 1 ? '#f8fafc' : '#fff', borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '12px 16px' }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a', lineHeight: 1.3 }}>{product.name}</div>
-                          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{product.cod}{product.brand ? ` · ${product.brand}` : ''}</div>
+                        <td style={{ padding: '10px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {(product.imagine || product.image_url) && (
+                              <img src={product.imagine || product.image_url} alt=""
+                                style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6, flexShrink: 0, background: '#f8fafc' }}
+                                onError={e => e.target.style.display = 'none'} />
+                            )}
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a', lineHeight: 1.3 }}>{product.name}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{product.cod}{product.brand ? ` · ${product.brand}` : ''}</div>
+                            </div>
+                          </div>
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'right', verticalAlign: 'top' }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: hasPromo ? '#94a3b8' : '#1d4ed8', textDecoration: hasPromo ? 'line-through' : 'none' }}>
@@ -494,7 +503,7 @@ export default function AdminOferta() {
                     {ofertaCalc.eligibleRules.map(rl => {
                       const d = describeRule(rl)
                       return (
-                        <div key={rl.id} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '10px 14px' }}>
+                        <div key={rl.id} className="promo-card" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '10px 14px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                             <span style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{d.nume}</span>
                             {d.eticheta && d.eticheta !== d.nume && <span style={{ fontSize: 10, padding: '1px 8px', borderRadius: 12, background: '#16a34a', color: '#fff', fontWeight: 600 }}>{d.eticheta}</span>}

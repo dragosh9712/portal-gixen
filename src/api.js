@@ -114,6 +114,7 @@ const api = {
     list:   ()                 => req('GET',  '/api/offers'),
     save:   data               => req('POST', '/api/offers', data),
     update: (id, data)         => req('PUT',  `/api/offers/${id}`, data),
+    remove: id                 => req('DELETE', `/api/offers/${id}`),
   },
   exchange: {
     get:        ()             => req('GET',  '/api/exchange'),

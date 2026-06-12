@@ -85,8 +85,9 @@ const bannerUpload = multer({
   }),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const ok = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(path.extname(file.originalname).toLowerCase())
-    cb(ok ? null : new Error('Doar imagini (jpg, png, webp, gif)'), ok)
+    // Acceptăm orice imagine după mimetype (jpg, png, webp, gif, jfif, avif etc.)
+    const ok = (file.mimetype || '').startsWith('image/')
+    cb(ok ? null : new Error(`Fișierul nu este o imagine (tip primit: ${file.mimetype || 'necunoscut'})`), ok)
   },
 })
 

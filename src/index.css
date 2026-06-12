@@ -259,5 +259,11 @@ tbody tr.selected td { background:var(--blue-bg); }
   .no-print { display: none !important; }
   /* Păstrează culorile/fundalurile închise la printare */
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  @page { margin: 12mm; }
+  @page { size: A4; margin: 8mm; }
+  /* Încadrare frumoasă pe A4: fără rupturi în mijlocul rândurilor/cardurilor */
+  .oferta-preview table { page-break-inside: auto; }
+  .oferta-preview tr { page-break-inside: avoid; }
+  .oferta-preview thead { display: table-header-group; }
+  .oferta-preview img { max-width: 36px; max-height: 36px; }
+  .oferta-preview .promo-card { page-break-inside: avoid; }
 }

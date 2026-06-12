@@ -11,6 +11,10 @@ const PORT = process.env.PORT || 80
 app.use(cors({ origin: '*' }))
 app.use(express.json({ limit: '10mb' }))
 
+// Audit log — loghează în SQL orice acțiune care modifică date (montat înaintea rutelor)
+const { auditMiddleware, logSystem } = require('./auditLog')
+app.use(auditMiddleware)
+
 // Static files — uploaded images
 const uploadDir = process.env.UPLOAD_DIR || './uploads'
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
@@ -86,7 +90,11 @@ async function refreshExchangeRate() {
       ELSE
         INSERT INTO exchange_rates (currency, bnr_rate, margin_percent, applied_rate) VALUES ('EUR', @bnr, @margin, @applied)`)
     console.log(`[exchange] refreshed EUR = ${applied} (BNR: ${bnrRate})`)
-  } catch (err) { console.error('BNR exchange refresh error:', err.message) }
+    logSystem('exchange.refresh_bnr', { bnr_rate: bnrRate, applied_rate: applied, margin_pct: margin })
+  } catch (err) {
+    console.error('BNR exchange refresh error:', err.message)
+    logSystem('exchange.refresh_bnr', { error: err.message })
+  }
 }
 
 function scheduleMidnightRefresh() {
@@ -181,12 +189,21 @@ startServer(() => {
   runMigrations()
   console.log(`   Health: http://localhost:${PORT}/api/health`)
   console.log(`   Env: ${process.env.NODE_ENV || 'development'}\n`)
+  logSystem('server.start', { port: PORT, env: process.env.NODE_ENV || 'development' })
   scheduleMidnightRefresh()
 
   // Monitor plăți proforme Selectsoft — la fiecare 15 minute
   const { monitorPendingPayments } = require('./routes/orders')
+  const runPaymentMonitor = async () => {
+    try {
+      const result = await monitorPendingPayments()
+      logSystem('selectsoft.monitor_payments', result || { ok: true })
+    } catch (err) {
+      logSystem('selectsoft.monitor_payments', { error: err.message })
+    }
+  }
   setTimeout(() => {
-    monitorPendingPayments()
-    setInterval(monitorPendingPayments, 15 * 60 * 1000)
+    runPaymentMonitor()
+    setInterval(runPaymentMonitor, 15 * 60 * 1000)
   }, 60 * 1000)
 })
