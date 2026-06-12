@@ -62,6 +62,10 @@ async function buildSsPayload(orderId, { proforma = false } = {}) {
     comanda: {
       nr_comanda: o.order_number,
       data_comanda: today,
+      // Tipul de document definit în Selectsoft (la Gixen: CMC = comandă client)
+      tip_document: proforma
+        ? (process.env.SELECTSOFT_PROFORMA_DOC_TYPE || process.env.SELECTSOFT_ORDER_DOC_TYPE || 'CMC')
+        : (process.env.SELECTSOFT_ORDER_DOC_TYPE || 'CMC'),
       tip_plata: o.payment_type === 'OP' ? 'OP' : 'CRD',
       sursa: 'PORTAL_GIXEN',
       valoare_comanda: Math.round((netFinal + tvaFinal) * 100) / 100,
