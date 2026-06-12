@@ -42,3 +42,4 @@ portal-api-v14-real/
 # Lockfile backend (nu versionam)
 portal-api/package-lock.json
 portal-api/node_modules/
+.claude/
