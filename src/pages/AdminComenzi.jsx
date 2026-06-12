@@ -148,7 +148,7 @@ export default function AdminComenzi() {
                       <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(o.id)} /></td>
                       <td><CopyButton text={o.nr}><b>{o.nr}</b></CopyButton></td>
                       <td style={{ fontSize: 12 }}>{firm?.name}</td>
-                      <td><b>{leiCuTva(o.total)}</b></td>
+                      <td><b>{lei(o.total)}</b></td>
                       <td>{statusBadge(o.status)}</td>
                       <td style={{ fontSize: 12 }}>{fmtDate(o.dataComanda)}</td>
                       <td style={{ fontSize: 12 }}>{o.nrFactura || <span style={{ color: 'var(--text3)' }}>—</span>}</td>
@@ -263,7 +263,7 @@ export default function AdminComenzi() {
                       <td>{lei(l.pretUnitar)}</td>
                       <td style={{color:'var(--text3)',fontSize:12}}>{lei(tvaVal(l.pretUnitar))}</td>
                       <td className="text-right">{lei(l.total)}</td>
-                      <td className="text-right"><b>{leiCuTva(l.total)}</b></td>
+                      <td className="text-right"><b>{lei(cuTva(l.total))}</b></td>
                     </tr>
                   )
                 })}

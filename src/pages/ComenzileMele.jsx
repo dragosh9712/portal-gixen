@@ -63,7 +63,7 @@ export default function ComenzileMele() {
                     </td>
                     <td>{fmtDate(order.dataComanda)}</td>
                     <td style={{ color: 'var(--text2)' }}>{order.lines.length} linie{order.lines.length !== 1 ? 'i' : ''}</td>
-                    <td><b>{leiCuTva(order.total)}</b></td>
+                    <td><b>{lei(order.total)}</b></td>
                     <td>{statusBadge(order.status)}</td>
                     <td>{fmtDate(order.dataLivrare)}</td>
                     <td>{order.nrFactura ? <span style={{ fontSize: 12, color: 'var(--blue)', cursor: 'pointer' }}>📄 {order.nrFactura}</span> : <span style={{ color: 'var(--text3)', fontSize: 12 }}>—</span>}</td>
