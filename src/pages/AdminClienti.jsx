@@ -690,7 +690,7 @@ export default function AdminClienti() {
                   </p>
 
                   <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border)', marginBottom: 16 }}>
-                    <textarea className="w-full" rows={4} placeholder={'Ex:\nPentru produsul Miramax 4s, 600g\ncost grafică — estimez maxim 1500 lei\ncustodie ambalaj 400kg × 15.5 RON = 6200 RON\npreț produs fără ambalaj: 5.65 lei + TVA'}
+                    <textarea className="w-full" rows={4} placeholder=""
                       value={newNote} onChange={e => setNewNote(e.target.value)}
                       style={{ resize: 'vertical', fontSize: 13, fontFamily: 'inherit' }} />
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>

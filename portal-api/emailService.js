@@ -11,13 +11,19 @@ function getTransport() {
   })
 }
 
-const LOGO_URL = (process.env.APP_URL || 'https://portal.gixen.ro').replace(/\/$/, '') + '/logo-email-white.svg'
+// LOGO_EMAIL_URL în .env — pune URL-ul direct al PNG-ului alb (ex: https://portal.gixen.ro/logo-white.png)
+// Dacă nu e setat, afișează text.
+const LOGO_URL = process.env.LOGO_EMAIL_URL
+  || (process.env.APP_URL || 'https://portal.gixen.ro').replace(/\/$/, '') + '/logo-email-white.svg'
 
 function header() {
+  const logoHtml = LOGO_URL
+    ? `<img src="${LOGO_URL}" alt="Gixen" width="160" height="48" style="display:block;margin:0 auto;max-width:160px;border:0" />`
+    : `<span style="color:#fff;font-size:26px;font-weight:900;letter-spacing:2px">GIXEN</span>`
   return `
   <div style="background:#1a3a6b;padding:28px 32px;text-align:center;border-radius:8px 8px 0 0">
-    <img src="${LOGO_URL}" alt="Gixen" width="120" height="36" style="display:block;margin:0 auto;max-width:120px" />
-    <div style="color:rgba(255,255,255,0.7);font-size:11px;margin-top:6px;letter-spacing:1px">PORTAL B2B</div>
+    ${logoHtml}
+    <div style="color:rgba(255,255,255,0.7);font-size:11px;margin-top:6px;letter-spacing:1px">PORTAL</div>
   </div>`
 }
 

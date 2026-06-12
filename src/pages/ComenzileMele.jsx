@@ -141,9 +141,9 @@ export default function ComenzileMele() {
               </tbody>
             </table>
             {(() => {
-              // order.total e NET autoritar (după discounturi). Subtotalul liniilor e brut (înainte de discount).
+              // order.netTotal = net după discount (fără TVA). order.total = gross (cu TVA).
               const subtotalLinii = selected.lines.reduce((s, l) => s + (l.total || 0), 0)
-              const netFinal = selected.total != null ? selected.total : subtotalLinii
+              const netFinal = selected.netTotal > 0 ? selected.netTotal : subtotalLinii
               const discount = Math.round((netFinal - subtotalLinii) * 100) / 100
               return (
                 <div className="summary-box" style={{ marginTop: 12 }}>
