@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
@@ -29,12 +29,22 @@ export default function Produse() {
   const { user } = useAuth()
   const { db, toggleFavorite, isFavorite, loadFavoritesForUser } = useStore()
   const navigate = useNavigate()
+  const routerLocation = useLocation()
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('toate')
   const [selected, setSelected] = useState(null)
   const [zoomImg, setZoomImg] = useState(null)
 
   useEffect(() => { if (user?.id) loadFavoritesForUser(user.id) }, [user?.id]) // eslint-disable-line
+
+  // Deschide automat modalul produsului dacă vine din Favorite (state.openProductId)
+  useEffect(() => {
+    const id = routerLocation.state?.openProductId
+    if (id && (db.products || []).length) {
+      const p = db.products.find(x => x.id === id)
+      if (p) setSelected(p)
+    }
+  }, [routerLocation.state, db.products])
 
   const customerId = user.customerId || user.customer_id
   const firm = (db.firms || []).find(f => f.id === customerId) || {}
@@ -90,7 +100,7 @@ export default function Produse() {
                   style={{ maxHeight: 145, maxWidth: '90%', objectFit: 'contain' }} />
                 {promoActive.length > 0 && (
                   <span style={{ position: 'absolute', bottom: 6, left: 6, fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: 'var(--green-bg)', color: 'var(--green-text)', border: '1px solid var(--green-text)' }}>
-                    🏷 {promoActive.length} promoție{promoActive.length > 1 ? 'i' : ''}
+                    🏷 {promoActive.length} {promoActive.length === 1 ? 'promoție' : 'promoții'}
                   </span>
                 )}
               </div>
@@ -226,7 +236,7 @@ export default function Produse() {
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelected(null)}>Închide</button>
-              <button className="btn btn-primary" onClick={() => { setSelected(null); navigate('/comanda-noua') }}>
+              <button className="btn btn-primary" onClick={() => { const id = selected.id; setSelected(null); navigate('/comanda-noua', { state: { addProductId: id } }) }}>
                 + Adaugă în comandă
               </button>
             </div>

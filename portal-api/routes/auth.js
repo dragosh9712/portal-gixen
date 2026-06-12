@@ -53,6 +53,7 @@ router.post('/login', async (req, res) => {
         name:          user.name,
         role:          user.role,
         customerId:    user.customer_id,
+        firmId:        user.customer_id,
         firmName:      user.firm_name,
         agentId:       user.agent_id,
         currency:      user.currency,

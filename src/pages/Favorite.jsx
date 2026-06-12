@@ -39,9 +39,10 @@ export default function Favorite() {
             const pretRola = parseFloat(p.pretBaza || p.active_base_price || 0)
             const pretDisc = globalDiscount > 0 ? Math.round(pretRola * (1 - globalDiscount) * 100) / 100 : pretRola
             return (
-              <div key={p.id} className="card" style={{ position: 'relative' }}>
+              <div key={p.id} className="card" style={{ position: 'relative', cursor: 'pointer' }}
+                onClick={() => navigate('/produse', { state: { openProductId: p.id } })}>
                 <button className="fav-btn" style={{ position: 'absolute', top: 10, right: 10 }}
-                  onClick={() => toggleFavorite(user.id, p.id)} title="Șterge din favorite">❤️</button>
+                  onClick={e => { e.stopPropagation(); toggleFavorite(user.id, p.id) }} title="Șterge din favorite">❤️</button>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                   <ProductImg src={p.imagine} name={p.name} />
                 </div>
@@ -58,7 +59,7 @@ export default function Favorite() {
                   <div style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 12 }}>Preț la cerere</div>
                 )}
                 <button className="btn btn-primary w-full" style={{ justifyContent: 'center', fontSize: 12 }}
-                  onClick={() => navigate('/comanda-noua')}>+ Adaugă în comandă</button>
+                  onClick={e => { e.stopPropagation(); navigate('/comanda-noua', { state: { addProductId: p.id } }) }}>+ Adaugă în comandă</button>
               </div>
             )
           })}

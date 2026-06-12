@@ -7,7 +7,8 @@ router.get('/', authenticateToken, async (req, res) => {
     const result = await query("SELECT * FROM exchange_rates WHERE currency='EUR'")
     const row = result.recordset[0]
     // Trimitem updated_at ca ISO string UTC pentru a evita probleme de timezone
-    res.json(row ? { currency: row.currency, rate: row.applied_rate, bnr_rate: row.bnr_rate, updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null } : { currency: 'EUR', rate: 5 })
+    // Includem și `applied_rate` (alias pentru `rate`) — unele pagini îl folosesc direct
+    res.json(row ? { currency: row.currency, rate: row.applied_rate, applied_rate: row.applied_rate, bnr_rate: row.bnr_rate, updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null } : { currency: 'EUR', rate: 5, applied_rate: 5 })
   }
   catch (err) { res.status(500).json({ error: err.message }) }
 })

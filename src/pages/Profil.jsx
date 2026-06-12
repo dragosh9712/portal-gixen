@@ -21,30 +21,43 @@ export default function Profil() {
   const [extraLocations, setExtraLocations] = useState([])
   const [locModal, setLocModal] = useState(null)
 
-  async function reloadLocations() {
-    try { setExtraLocations(await api.customers.locations(user.firmId) || []) } catch { }
-  }
-  useEffect(() => { if (user?.firmId) reloadLocations() }, [user?.firmId]) // eslint-disable-line
+  // Login trimite customerId; păstrăm fallback la firmId pentru sesiuni vechi
+  const clientId = user.customerId || user.firmId
 
-  const firm = (db.firms || []).find(f => f.id === user.firmId)
-  const delegates = (db.users || []).filter(u => u.firmId === user.firmId && u.id !== user.id && u.status !== 'inactive')
-  const surveyResult = getSurveyResult(user.firmId)
+  async function reloadLocations() {
+    try { setExtraLocations(await api.customers.locations(clientId) || []) } catch { }
+  }
+  useEffect(() => { if (clientId) reloadLocations() }, [clientId]) // eslint-disable-line
+
+  const firm = (db.firms || []).find(f => f.id === clientId)
+  const delegates = (db.users || []).filter(u => (u.firmId === clientId || u.customer_id === clientId) && u.id !== user.id && u.status !== 'inactive')
+  const surveyResult = getSurveyResult(clientId)
   const isPrimary = user.delegate_type === 'primary' || user.role === 'admin'
 
   const [form, setForm] = useState({
-    name: firm?.name || '', cui: firm?.cui || '', regCom: firm?.regCom || '',
-    adresa: firm?.adresa || '', telefon: firm?.telefon || '', email: firm?.email || '',
-    iban: firm?.iban || '', banca: firm?.banca || '', site_web: firm?.site_web || '',
-    email_documente: firm?.email_documente || '', program_livrare: firm?.program_livrare || '',
-    adresa_livrare: firm?.adresa_livrare || '', default_transport_type: firm?.default_transport_type || 'Van',
-    newsletter_opt_in: !!firm?.newsletter_opt_in,
+    name: '', cui: '', regCom: '', adresa: '', telefon: '', email: '',
+    iban: '', banca: '', site_web: '', email_documente: '', program_livrare: '',
+    adresa_livrare: '', default_transport_type: 'Van', newsletter_opt_in: false,
   })
+
+  // Sincronizează formularul când firma se încarcă din API (db.firms poate veni după mount)
+  useEffect(() => {
+    if (!firm) return
+    setForm({
+      name: firm.name || '', cui: firm.cui || firm.tax_id || '', regCom: firm.regCom || firm.trade_register_no || '',
+      adresa: firm.adresa || firm.address || '', telefon: firm.telefon || firm.phone || '', email: firm.email || '',
+      iban: firm.iban || '', banca: firm.banca || '', site_web: firm.site_web || '',
+      email_documente: firm.email_documente || '', program_livrare: firm.program_livrare || '',
+      adresa_livrare: firm.adresa_livrare || '', default_transport_type: firm.default_transport_type || 'Van',
+      newsletter_opt_in: !!firm.newsletter_opt_in,
+    })
+  }, [firm?.id]) // eslint-disable-line
 
   function showToast(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 2500) }
 
   function handleSave(e) {
     e.preventDefault()
-    updateFirm(user.firmId, form)
+    updateFirm(clientId, form)
     showToast('Datele au fost salvate!')
   }
 
@@ -55,7 +68,7 @@ export default function Profil() {
     else if (!/\S+@\S+\.\S+/.test(delegateForm.email)) e.email = 'Email invalid'
     if (!delegateForm.password || delegateForm.password.length < 6) e.password = 'Minim 6 caractere'
     if (Object.keys(e).length) { setDelegateErrors(e); return }
-    addDelegate(user.firmId, delegateForm)
+    addDelegate(clientId, delegateForm)
     setAddDelegateModal(false)
     setDelegateForm({ name: '', email: '', password: '', can_place_orders: true })
     setDelegateErrors({})
@@ -188,7 +201,7 @@ export default function Profil() {
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLocModal({ ...loc })}>Editează</button>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={async () => {
                   if (!confirm('Ștergi acest punct de livrare?')) return
-                  try { await api.customers.delLocation(user.firmId, loc.id); await reloadLocations(); showToast('Punct șters') } catch (err) { showToast(err.message, 'error') }
+                  try { await api.customers.delLocation(clientId, loc.id); await reloadLocations(); showToast('Punct șters') } catch (err) { showToast(err.message, 'error') }
                 }}>✕</button>
               </div>
             ))}
@@ -238,8 +251,8 @@ export default function Profil() {
               <button className="btn btn-secondary" onClick={() => setLocModal(null)}>Anulează</button>
               <button className="btn btn-primary" disabled={!locModal.name?.trim() || !locModal.address?.trim()} onClick={async () => {
                 try {
-                  if (locModal.id) await api.customers.updLocation(user.firmId, locModal.id, locModal)
-                  else await api.customers.addLocation(user.firmId, locModal)
+                  if (locModal.id) await api.customers.updLocation(clientId, locModal.id, locModal)
+                  else await api.customers.addLocation(clientId, locModal)
                   setLocModal(null)
                   await reloadLocations()
                   showToast('Punct de livrare salvat!')

@@ -30,9 +30,9 @@ export default function PromoBannerPopup({ bannere, onClose }) {
         </div>
 
         {banner.image_url && (
-          <div style={{ margin: '0 -20px', overflow: 'hidden', maxHeight: 280 }}>
+          <div style={{ margin: '0 -20px', display: 'flex', justifyContent: 'center', background: 'var(--bg)' }}>
             <img src={banner.image_url} alt={banner.title}
-              style={{ width: '100%', objectFit: 'cover' }}
+              style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain' }}
               onError={e => e.target.style.display = 'none'} />
           </div>
         )}

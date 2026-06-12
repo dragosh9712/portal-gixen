@@ -121,4 +121,14 @@ router.delete('/product-image/:productId', authenticateToken, requireAdmin, asyn
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// Error handler — convertește erorile multer (fișier prea mare, tip greșit) în 400 cu mesaj clar
+// (altfel Express returnează 500 cu HTML și clientul nu vede cauza)
+router.use((err, req, res, next) => {
+  if (err) {
+    console.error('[upload] error:', err.message)
+    return res.status(400).json({ error: err.message || 'Eroare la încărcarea fișierului' })
+  }
+  next()
+})
+
 module.exports = router

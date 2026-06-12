@@ -93,7 +93,7 @@ export default function AdminBannere() {
                 <label className="label">Imagine banner</label>
                 {form.image_url ? (
                   <div>
-                    <img src={form.image_url} alt="" style={{ maxWidth: '100%', maxHeight: 140, borderRadius: 8, objectFit: 'cover', marginBottom: 6 }}
+                    <img src={form.image_url} alt="" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8, objectFit: 'contain', marginBottom: 6, background: 'var(--bg)' }}
                       onError={e => e.target.style.display = 'none'} />
                     <div>
                       <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--red)' }}

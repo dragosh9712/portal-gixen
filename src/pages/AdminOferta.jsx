@@ -52,6 +52,7 @@ export default function AdminOferta() {
   const firms = (db.firms || []).filter(f => f.status === 'activ')
   const selectedFirm = firms.find(f => f.id === selectedFirmId) || null
   const exRate = getExchangeRate('EUR')
+  const eurRate = parseFloat(exRate?.applied_rate || exRate?.rate || 0)
   const isEur = selectedFirm?.currency === 'EUR'
 
   const visibleProducts = useMemo(() => {
@@ -82,17 +83,63 @@ export default function AdminOferta() {
 
   function fmtVal(val, forceLei = false) {
     if (val == null) return '—'
-    if (!forceLei && isEur && exRate) return eur(val / exRate.applied_rate)
+    if (!forceLei && isEur && eurRate > 0) return eur(val / eurRate)
     return lei(val)
   }
 
-  function doSave(firmIdOverride) {
+  // Construiește liniile ofertei (preț/rolă + discounturi din promoții) pentru o firmă dată
+  function buildOfferData(calc) {
+    const linii = []
+    const discountLinii = []
+    let totalBrut = 0
+    let totalNet = 0
+    calc.produse.forEach((p, idx) => {
+      const pretBaza = calc.pricesPerUom[p.id]?.ROLA ?? 0
+      const promoAplic = calc.eligibleRules.filter(rule => {
+        const orig = (db.promotionRules || []).find(r => r.id === rule.id)
+        if (!orig) return true
+        const a = orig.actiune
+        return !a || a.tip?.includes('total') || a.productIdTinta === p.id
+      })
+      let pretFinal = pretBaza
+      promoAplic.forEach(rule => {
+        const orig = (db.promotionRules || []).find(r => r.id === rule.id)
+        const a = orig?.actiune
+        if (!a) return
+        if (a.tip === 'discount_procent_linie' || a.tip === 'discount_procent_total') {
+          pretFinal = pretFinal * (1 - a.valoare / 100)
+        } else if (a.tip === 'produs_gratuit' && a.productIdTinta === p.id) {
+          pretFinal = Math.max(0, pretFinal - pretBaza * (a.cantitateGratuita || 1))
+        }
+      })
+      pretFinal = Math.round(pretFinal * 100) / 100
+      totalBrut += pretBaza
+      totalNet += pretFinal
+      linii.push({ productId: p.id, cantitate: 1, unitateSel: 'ROLA', pretUnitar: pretBaza, total: pretFinal })
+      if (pretFinal < pretBaza) {
+        discountLinii.push({ refLinie: idx, eticheta: promoAplic.map(r => r.eticheta || r.name).filter(Boolean).join(', ') || 'Promoție', valoare: Math.round((pretFinal - pretBaza) * 100) / 100 })
+      }
+    })
+    totalBrut = Math.round(totalBrut * 100) / 100
+    totalNet = Math.round(totalNet * 100) / 100
+    const tva = Math.round(totalNet * TVA_RATE * 100) / 100
+    return {
+      linii, discountLinii,
+      totalBrut, totalNet, tva,
+      totalDiscount: Math.round((totalNet - totalBrut) * 100) / 100,
+      totalCuTva: Math.round((totalNet + tva) * 100) / 100,
+    }
+  }
+
+  async function doSave(firmIdOverride) {
     if (!ofertaCalc) return false
     const tFirm = firmIdOverride ? firms.find(f => f.id === firmIdOverride) : selectedFirm
     const calc = firmIdOverride ? calculeazaOferta(selectedProducts, tFirm, db) : ofertaCalc
-    saveOffer({
+    const totals = buildOfferData(calc)
+    await saveOffer({
       id: 'of' + Date.now(), nr: firmIdOverride ? genNr() : offerNr,
       firmId: firmIdOverride || selectedFirmId || null,
+      customer_id: firmIdOverride || selectedFirmId || null,
       clientName: tFirm?.name || 'Ofertă generală',
       offer_type: (firmIdOverride || selectedFirmId) ? 'client' : 'agent',
       agent_id: tFirm?.agent_id || null,
@@ -100,12 +147,78 @@ export default function AdminOferta() {
       dataEmitere: new Date().toISOString().split('T')[0],
       dataExpirare: new Date(Date.now() + valabilitate * 86400000).toISOString().split('T')[0],
       valabilitate, products_selected: selectedProducts,
-      prices_per_uom: calc.pricesPerUom, scenarios: calc.scenarios,
+      prices_per_uom: calc.pricesPerUom,
+      ...totals,
       currency: tFirm?.currency || 'RON',
-      applied_exchange_rate: tFirm?.currency === 'EUR' ? exRate?.applied_rate : null,
+      applied_exchange_rate: tFirm?.currency === 'EUR' ? eurRate : null,
       observatii,
     })
     return true
+  }
+
+  // Print curat: deschide o fereastră nouă doar cu oferta (nu printează tot layout-ul admin)
+  function printOferta() {
+    if (!ofertaCalc) return
+    const t = buildOfferData(ofertaCalc)
+    const rows = t.linii.map(l => {
+      const prod = (db.products || []).find(p => p.id === l.productId)
+      const disc = t.discountLinii.find(d => d.refLinie === t.linii.indexOf(l))
+      const hasPromo = l.total < l.pretUnitar
+      return `<tr>
+        <td>${prod?.name || l.productId}<div style="color:#94a3b8;font-size:10px">${prod?.cod || ''}</div></td>
+        <td style="text-align:right">${l.pretUnitar.toFixed(2)} RON</td>
+        <td style="font-size:11px;color:#15803d">${disc ? disc.eticheta : '—'}</td>
+        <td style="text-align:right;font-weight:700;color:${hasPromo ? '#16a34a' : '#0f172a'}">${l.total.toFixed(2)} RON</td>
+        <td style="text-align:right;color:#64748b">${(l.total * TVA_RATE).toFixed(2)} RON</td>
+      </tr>`
+    }).join('')
+    const buyer = selectedFirm
+      ? `<b>${selectedFirm.name}</b><br>CUI: ${selectedFirm.cui || selectedFirm.tax_id || '—'}<br>${selectedFirm.adresa || selectedFirm.address || ''}`
+      : 'Ofertă generală'
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${offerNr}</title>
+      <style>
+        body { font-family: Arial, sans-serif; max-width: 820px; margin: 24px auto; color: #0f172a; font-size: 13px; }
+        .hd { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #21376c; padding-bottom:16px; margin-bottom:16px; }
+        h1 { font-size: 22px; color: #21376c; margin: 0 0 4px; }
+        .meta { color: #64748b; font-size: 12px; line-height: 1.6; }
+        .parties { display:flex; justify-content:space-between; gap:32px; margin-bottom:20px; font-size:12px; line-height:1.6; }
+        .lbl { font-size:9px; font-weight:700; color:#94a3b8; letter-spacing:.1em; text-transform:uppercase; margin-bottom:4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th { background: #21376c; color: #fff; padding: 8px 10px; text-align: left; font-size: 10px; }
+        td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+        .totals { margin-top: 16px; margin-left: auto; width: 300px; }
+        .totals div { display: flex; justify-content: space-between; padding: 4px 0; }
+        .totals .big { font-size: 16px; font-weight: 700; border-top: 2px solid #21376c; padding-top: 8px; }
+        @media print { body { margin: 0; } }
+      </style></head><body>
+      <div class="hd">
+        <div><h1>GIXEN</h1><div class="meta">Ofertă comercială</div></div>
+        <div style="text-align:right"><div style="font-weight:800;font-size:18px">${offerNr}</div>
+          <div class="meta">Data emiterii: ${todayFmt()}</div>
+          <div class="meta" style="color:#b45309">Valabilă ${valabilitate} zile · până la ${addDaysFmt(valabilitate)}</div></div>
+      </div>
+      <div class="parties">
+        <div><div class="lbl">Furnizor</div><b>${GIXEN.name}</b><br>CUI: ${GIXEN.cui}<br>${GIXEN.adresa}<br>${GIXEN.email} · ${GIXEN.telefon}</div>
+        <div style="text-align:right"><div class="lbl">Cumpărător</div>${buyer}</div>
+      </div>
+      <table>
+        <thead><tr><th>Produs</th><th style="text-align:right">Preț/rolă</th><th>Promoții</th><th style="text-align:right">Preț final/rolă</th><th style="text-align:right">TVA ${TVA_LABEL}</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="totals">
+        <div><span>Total brut</span><span>${t.totalBrut.toFixed(2)} RON</span></div>
+        ${t.totalDiscount < 0 ? `<div style="color:#16a34a"><span>Reduceri</span><span>${t.totalDiscount.toFixed(2)} RON</span></div>` : ''}
+        <div><span>Total net (fără TVA)</span><span>${t.totalNet.toFixed(2)} RON</span></div>
+        <div><span>TVA ${TVA_LABEL}</span><span>${t.tva.toFixed(2)} RON</span></div>
+        <div class="big"><span>Total cu TVA</span><span>${t.totalCuTva.toFixed(2)} RON</span></div>
+      </div>
+      ${observatii ? `<p class="meta" style="margin-top:20px"><b>Observații:</b> ${observatii}</p>` : ''}
+      <p class="meta" style="margin-top:16px">Prețurile sunt exprimate per rolă, în RON.</p>
+      <script>window.onload=()=>setTimeout(()=>window.print(),300)</` + `script>
+      </body></html>`
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close() }
+    else alert('Permite ferestrele pop-up pentru a genera PDF-ul.')
   }
 
   const totalFaraPromo = ofertaCalc?.scenarios?.[0]?.totals || {}
@@ -221,9 +334,12 @@ export default function AdminOferta() {
           <div className="card" style={{ marginBottom: 16, padding: '10px 16px' }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setStep(1)}>← Modifică</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨 Print / PDF</button>
+              <button className="btn btn-secondary btn-sm" onClick={printOferta}>🖨 Print / PDF</button>
               {!saved
-                ? <button className="btn btn-primary btn-sm" onClick={() => { doSave(); setSaved(true) }}>💾 Salvează oferta</button>
+                ? <button className="btn btn-primary btn-sm" onClick={async () => {
+                    try { await doSave(); setSaved(true) }
+                    catch (err) { alert('Eroare la salvare: ' + (err.message || err)) }
+                  }}>💾 Salvează oferta</button>
                 : <button className="btn btn-success btn-sm" onClick={() => navigate('/admin/oferte')}>✓ Salvată → Oferte</button>
               }
               <button className="btn btn-secondary btn-sm" onClick={() => setShowCopy(v => !v)}>📋 Copiază pentru alt client</button>
@@ -244,11 +360,13 @@ export default function AdminOferta() {
                     <option key={f.id} value={f.id}>{f.name} ({f.currency})</option>
                   ))}
                 </select>
-                <button className="btn btn-primary btn-sm" disabled={!copyTarget} onClick={() => {
-                  doSave(copyTarget)
+                <button className="btn btn-primary btn-sm" disabled={!copyTarget} onClick={async () => {
                   const name = firms.find(f => f.id === copyTarget)?.name
-                  setShowCopy(false); setCopyTarget('')
-                  alert(`✓ Ofertă copiată și salvată pentru ${name}`)
+                  try {
+                    await doSave(copyTarget)
+                    setShowCopy(false); setCopyTarget('')
+                    alert(`✓ Ofertă copiată și salvată pentru ${name}`)
+                  } catch (err) { alert('Eroare la salvare: ' + (err.message || err)) }
                 }}>Copiază</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setShowCopy(false); setCopyTarget('') }}>×</button>
               </div>
@@ -315,7 +433,7 @@ export default function AdminOferta() {
               {/* ── TABEL PREȚURI PER ROLĂ ── */}
               <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.12em', marginBottom: 10, textTransform: 'uppercase' }}>
                 Prețuri comerciale {selectedFirm ? `— ${selectedFirm.name}` : '(prețuri de bază)'}
-                {isEur && exRate && <span style={{ color: '#b45309', marginLeft: 8 }}>· EUR la {exRate.applied_rate.toFixed(4)} RON</span>}
+                {isEur && eurRate > 0 && <span style={{ color: '#b45309', marginLeft: 8 }}>· EUR la {eurRate.toFixed(4)} RON</span>}
               </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 2 }}>
@@ -398,9 +516,9 @@ export default function AdminOferta() {
                         <td style={{ padding: '12px 14px', textAlign: 'right', verticalAlign: 'top' }}>
                           <div style={{ fontSize: 12, color: '#64748b' }}>{fmtVal(Math.round(pretFinal * TVA_RATE * 100) / 100)}</div>
                         </td>
-                        {isEur && exRate && (
+                        {isEur && eurRate > 0 && (
                           <td style={{ padding: '12px 14px', textAlign: 'right', verticalAlign: 'top' }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: '#b45309' }}>{eur(pretFinal / exRate.applied_rate)}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: '#b45309' }}>{eur(pretFinal / eurRate)}</div>
                           </td>
                         )}
                       </tr>

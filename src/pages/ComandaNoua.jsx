@@ -63,7 +63,7 @@ export default function ComandaNoua() {
   const [observatii, setObservatii] = useState('')
   // Bug 16: delivery location per comandă
   const [deliveryLocationId, setDeliveryLocationId] = useState('main')
-  const [paymentType, setPaymentType] = useState('OP')
+  const paymentType = 'OP' // mereu OP — clientul nu mai alege tipul de plată
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('toate')
   const [toast, setToast] = useState(null)
@@ -87,8 +87,15 @@ export default function ComandaNoua() {
         if (pid) newCart[pid] = { cantitate: line.cantitate || line.quantity || 1, unitateSel: line.uom_code || line.unitateSel || 'BAX' }
       })
       setCart(newCart)
+      return
     }
-  }, []) // eslint-disable-line
+    // Adăugare directă a unui produs din pagina Produse / Favorite
+    const addId = location.state?.addProductId
+    if (addId) {
+      const prod = (db.products || []).find(p => p.id === addId)
+      if (prod) setCart({ [addId]: { cantitate: 1, unitateSel: getDefaultUom(prod) } })
+    }
+  }, [location.state, db.products]) // eslint-disable-line
 
   function getUomCoeficient(product, uomCode) {
     const uom = (product.product_uom || []).find(u => u.uom_code === uomCode)
@@ -384,15 +391,6 @@ export default function ComandaNoua() {
               <div className="form-group">
                 <label>Data livrare dorită</label>
                 <input type="date" className="w-full" value={dataLivrare} onChange={e => setDataLivrare(e.target.value)} min={new Date().toISOString().split('T')[0]} />
-              </div>
-
-              <div className="form-group">
-                <label>Tip plată</label>
-                <select className="w-full" value={paymentType} onChange={e => setPaymentType(e.target.value)}>
-                  <option value="OP">Ordin de plată (OP)</option>
-                  <option value="CRD">Card</option>
-                  <option value="NUM">Numerar</option>
-                </select>
               </div>
 
               <div className="form-group">
