@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { statusBadge, lei, fmtDate, fmtDateTime, getInitials } from '../utils'
@@ -17,6 +18,7 @@ export default function AdminClienti() {
     saveCommissionRule, addDeliveryLocation, removeDeliveryLocation
   } = useStore()
 
+  const navigate = useNavigate()
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('info')
   const [editForm, setEditForm] = useState(null)
@@ -647,8 +649,9 @@ export default function AdminClienti() {
                           <thead><tr><th>Nr.</th><th>Data</th><th>Total</th><th>Transport</th><th>Status</th></tr></thead>
                           <tbody>
                             {clientOrders.map(o => (
-                              <tr key={o.id}>
-                                <td style={{ fontWeight: 500 }}>{o.nr}</td>
+                              <tr key={o.id} style={{ cursor: 'pointer' }}
+                                onClick={() => { setSelected(null); navigate('/admin/comenzi?id=' + o.id) }}>
+                                <td style={{ fontWeight: 500, color: 'var(--blue)' }}>{o.nr}</td>
                                 <td>{fmtDate(o.dataComanda)}</td>
                                 <td style={{ fontWeight: 600 }}>{lei(o.total)}</td>
                                 <td style={{ fontSize: 12, color: 'var(--text3)' }}>{o.transport_type || '—'}</td>

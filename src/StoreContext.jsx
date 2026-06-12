@@ -338,20 +338,26 @@ export function StoreProvider({ children }) {
     })
   }
 
-  // ── Favorites ──
+  // ── Favorites — persistent în localStorage ──
   function toggleFavorite(userId, productId) {
     setDb(prev => {
       const favs = prev.favorites || []
       const idx = favs.findIndex(f => f.userId === userId && f.productId === productId)
-      return {
-        ...prev,
-        favorites: idx >= 0 ? favs.filter((_, i) => i !== idx) : [...favs, { userId, productId }]
-      }
+      const newFavs = idx >= 0 ? favs.filter((_, i) => i !== idx) : [...favs, { userId, productId }]
+      try { localStorage.setItem('gixen_favorites_' + userId, JSON.stringify(newFavs)) } catch { }
+      return { ...prev, favorites: newFavs }
     })
   }
 
   function isFavorite(userId, productId) {
     return (db.favorites || []).some(f => f.userId === userId && f.productId === productId)
+  }
+
+  function loadFavoritesForUser(userId) {
+    try {
+      const raw = localStorage.getItem('gixen_favorites_' + userId)
+      if (raw) setDb(prev => ({ ...prev, favorites: JSON.parse(raw) }))
+    } catch { }
   }
 
   // ── Promotions ──
@@ -619,7 +625,7 @@ export function StoreProvider({ children }) {
       // Pricing
       getPretPentruClient, setClientPricing,
       // Favorites
-      toggleFavorite, isFavorite,
+      toggleFavorite, isFavorite, loadFavoritesForUser,
       // Promotions
       addPromotion, updatePromotion, togglePromotion,
       addPromotionRule, updatePromotionRule, togglePromotionRule,

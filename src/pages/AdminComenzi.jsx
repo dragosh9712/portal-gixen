@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import api from '../api'
@@ -32,12 +33,23 @@ function Toast({ msg, onDone }) {
 
 export default function AdminComenzi() {
   const { db, updateOrderStatus, setFactura, addNotaInterna, bulkUpdateOrderStatus, updateTransport, updateDocumente, updateAdresaLivrare } = useStore()
+  const routerLocation = useLocation()
   const locations = db.locations || []
   const [filterStatus, setFilterStatus] = useState('toate')
   const [filterFirm, setFilterFirm] = useState('toate')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [facturaInput, setFacturaInput] = useState('')
+
+  // Deschide comanda dacă vine cu ?id= din AdminClienti
+  useEffect(() => {
+    const params = new URLSearchParams(routerLocation.search)
+    const id = params.get('id')
+    if (id && db.orders.length) {
+      const order = db.orders.find(o => o.id === id)
+      if (order) setSelected(order)
+    }
+  }, [routerLocation.search, db.orders])
   const [notaInput, setNotaInput] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [toast, setToast] = useState(null)

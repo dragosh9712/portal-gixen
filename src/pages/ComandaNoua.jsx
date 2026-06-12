@@ -78,14 +78,17 @@ export default function ComandaNoua() {
   const selectedDelivery = deliveryLocations.find(d => d.id === deliveryLocationId) || deliveryLocations[0]
 
   useEffect(() => {
-    if (location.state?.reorderLines) {
+    // Suportă atât { reorderLines: [...] } cât și { reorder: order }
+    const lines = location.state?.reorderLines || location.state?.reorder?.lines
+    if (lines?.length) {
       const newCart = {}
-      location.state.reorderLines.forEach(line => {
-        newCart[line.productId] = { cantitate: line.cantitate, unitateSel: line.uom_code || 'BAX' }
+      lines.forEach(line => {
+        const pid = line.productId || line.product_id
+        if (pid) newCart[pid] = { cantitate: line.cantitate || line.quantity || 1, unitateSel: line.uom_code || line.unitateSel || 'BAX' }
       })
       setCart(newCart)
     }
-  }, [])
+  }, []) // eslint-disable-line
 
   function getUomCoeficient(product, uomCode) {
     const uom = (product.product_uom || []).find(u => u.uom_code === uomCode)
