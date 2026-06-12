@@ -114,9 +114,8 @@ async function pushOrderToSelectsoft(orderId, { proforma = false } = {}) {
 }
 
 // ── Verificare plată proformă în Selectsoft ──────────────────────────────────
-// /restdoc returnează DOAR documentele neachitate sau achitate parțial
-// (doc API v1.7: documente[].{nr_comanda, nr_intern, facturat, achitat, restant}).
-// Plătit = documentul nu mai apare în listă SAU are restant <= 0.
+// /restdoc returnează documente cu suma_cu_tva și suma_incasari.
+// Plătit = documentul nu mai apare în listă SAU suma_incasari >= suma_cu_tva.
 async function checkProformaPayment(orderId) {
   const ss = require('../selectsoftService')
   if (!ss.isConfigured()) return { checked: false, reason: 'Selectsoft neconfigurat' }
@@ -133,9 +132,9 @@ async function checkProformaPayment(orderId) {
   const doc = Array.isArray(restDocs)
     ? restDocs.find(d => String(d.nr_intern) === String(o.proforma_nr_intern))
     : null
-  const stillUnpaid = doc != null && parseFloat(doc.restant) > 0
+  const paid = doc == null || parseFloat(doc.suma_incasari || 0) >= parseFloat(doc.suma_cu_tva || 0)
 
-  if (!stillUnpaid) {
+  if (paid) {
     await query(`
       UPDATE orders SET payment_status='platit', payment_confirmed_at=SYSDATETIME(),
         status = CASE WHEN status='asteptare_plata' THEN 'in_aprobare' ELSE status END
@@ -151,7 +150,8 @@ async function checkProformaPayment(orderId) {
     }
     return { checked: true, paid: true, justConfirmed: true }
   }
-  return { checked: true, paid: false, facturat: doc.facturat, achitat: doc.achitat, restant: doc.restant }
+  const restant = Math.max(0, parseFloat(doc.suma_cu_tva || 0) - parseFloat(doc.suma_incasari || 0))
+  return { checked: true, paid: false, suma_cu_tva: doc.suma_cu_tva, suma_incasari: doc.suma_incasari, restant }
 }
 
 // Monitor periodic — verifică toate comenzile în așteptarea plății

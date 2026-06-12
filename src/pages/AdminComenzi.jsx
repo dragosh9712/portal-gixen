@@ -204,7 +204,7 @@ export default function AdminComenzi() {
                         showToast('✓ Plata confirmată în Selectsoft!')
                       } else {
                         showToast(r.reason || (r.restant != null
-                          ? `Neachitat — restant ${r.restant} RON (achitat ${r.achitat || 0})`
+                          ? `Neachitat — restant ${r.restant.toFixed(2)} RON (încasat ${parseFloat(r.suma_incasari || 0).toFixed(2)} / ${parseFloat(r.suma_cu_tva || 0).toFixed(2)} RON)`
                           : 'Plata nu a fost încă înregistrată în Selectsoft'))
                       }
                     } catch (e) { showToast('Eroare verificare: ' + e.message) }
