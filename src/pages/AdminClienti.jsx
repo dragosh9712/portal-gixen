@@ -686,7 +686,12 @@ export default function AdminClienti() {
                       <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
                       Clientul nu a completat survey-ul.
                       <br />
-                      <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => showToast('Email trimis!')}>📧 Trimite reminder</button>
+                      <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={async () => {
+                        try {
+                          const r = await api.customers.surveyReminder(selected.id)
+                          showToast(r.message || 'Reminder trimis!')
+                        } catch (err) { showToast(err.message || 'Eroare la trimitere', 'error') }
+                      }}>📧 Trimite reminder</button>
                     </div>
                   )}
                 </div>

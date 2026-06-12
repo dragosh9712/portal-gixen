@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
@@ -18,6 +18,13 @@ export default function Profil() {
   const [addDelegateModal, setAddDelegateModal] = useState(false)
   const [delegateForm, setDelegateForm] = useState({ name: '', email: '', password: '', can_place_orders: true })
   const [delegateErrors, setDelegateErrors] = useState({})
+  const [extraLocations, setExtraLocations] = useState([])
+  const [locModal, setLocModal] = useState(null)
+
+  async function reloadLocations() {
+    try { setExtraLocations(await api.customers.locations(user.firmId) || []) } catch { }
+  }
+  useEffect(() => { if (user?.firmId) reloadLocations() }, [user?.firmId]) // eslint-disable-line
 
   const firm = (db.firms || []).find(f => f.id === user.firmId)
   const delegates = (db.users || []).filter(u => u.firmId === user.firmId && u.id !== user.id && u.status !== 'inactive')
@@ -140,21 +147,12 @@ export default function Profil() {
           <div className="card">
             <div className="section-title" style={{ marginBottom: 16 }}>Informații livrare</div>
             <div className="form-group">
-              <label>Adresă de livrare</label>
+              <label>Adresă de livrare principală</label>
               <textarea className="w-full" rows={3} value={form.adresa_livrare} onChange={e => setForm(p => ({ ...p, adresa_livrare: e.target.value }))} placeholder="Adresa punct de livrare" />
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Program livrare</label>
-                <input type="text" className="w-full" value={form.program_livrare} onChange={e => setForm(p => ({ ...p, program_livrare: e.target.value }))} placeholder="Luni-Vineri 09:00-17:00" />
-              </div>
-              <div className="form-group">
-                <label>Transport preferat</label>
-                <select className="w-full" value={form.default_transport_type} onChange={e => setForm(p => ({ ...p, default_transport_type: e.target.value }))}>
-                  <option value="Van">Duba (Van)</option>
-                  <option value="Truck">TIR (Camion)</option>
-                </select>
-              </div>
+            <div className="form-group">
+              <label>Program livrare</label>
+              <input type="text" className="w-full" value={form.program_livrare} onChange={e => setForm(p => ({ ...p, program_livrare: e.target.value }))} placeholder="Luni-Vineri 09:00-17:00" />
             </div>
             <div className="form-group">
               <label>Email primire documente (facturi, avize)</label>
@@ -171,9 +169,86 @@ export default function Profil() {
               </label>
             </div>
             <button type="submit" className="btn btn-primary" style={{ marginTop: 16 }}>Salvează</button>
+
+            <div className="divider" style={{ marginTop: 20 }} />
+            <div className="flex-between" style={{ marginBottom: 12 }}>
+              <div className="section-title">Puncte de livrare suplimentare</div>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLocModal({ name: '', address: '', locality: '', county: '', contact_phone: '', program: '' })}>+ Adaugă punct</button>
+            </div>
+            {extraLocations.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>Niciun punct suplimentar. Comenzile se livrează la adresa principală.</div>
+            ) : extraLocations.map(loc => (
+              <div key={loc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg)', borderRadius: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 18 }}>📍</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{loc.name}{loc.is_default ? <span style={{ fontSize: 10, color: 'var(--blue-text)', marginLeft: 6 }}>(implicit)</span> : null}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)' }}>{loc.address}{loc.locality ? `, ${loc.locality}` : ''}{loc.county ? `, ${loc.county}` : ''}</div>
+                  {loc.program && <div style={{ fontSize: 11, color: 'var(--text3)' }}>Program: {loc.program}</div>}
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLocModal({ ...loc })}>Editează</button>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={async () => {
+                  if (!confirm('Ștergi acest punct de livrare?')) return
+                  try { await api.customers.delLocation(user.firmId, loc.id); await reloadLocations(); showToast('Punct șters') } catch (err) { showToast(err.message, 'error') }
+                }}>✕</button>
+              </div>
+            ))}
           </div>
         )}
       </form>
+
+      {/* Modal adăugare/editare punct livrare */}
+      {locModal && (
+        <div className="modal-overlay" onClick={() => setLocModal(null)}>
+          <div className="modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr">
+              <h3>{locModal.id ? 'Editează punct de livrare' : 'Punct de livrare nou'}</h3>
+              <button className="modal-close" onClick={() => setLocModal(null)}>×</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="form-group">
+                <label>Denumire punct (ex: Depozit Cluj)</label>
+                <input type="text" className="w-full" value={locModal.name} onChange={e => setLocModal(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Adresă</label>
+                <textarea className="w-full" rows={2} value={locModal.address} onChange={e => setLocModal(p => ({ ...p, address: e.target.value }))} />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Localitate</label>
+                  <input type="text" className="w-full" value={locModal.locality} onChange={e => setLocModal(p => ({ ...p, locality: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Județ</label>
+                  <input type="text" className="w-full" value={locModal.county} onChange={e => setLocModal(p => ({ ...p, county: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Telefon contact</label>
+                  <input type="text" className="w-full" value={locModal.contact_phone} onChange={e => setLocModal(p => ({ ...p, contact_phone: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Program</label>
+                  <input type="text" className="w-full" value={locModal.program} onChange={e => setLocModal(p => ({ ...p, program: e.target.value }))} placeholder="L-V 08-16" />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setLocModal(null)}>Anulează</button>
+              <button className="btn btn-primary" disabled={!locModal.name?.trim() || !locModal.address?.trim()} onClick={async () => {
+                try {
+                  if (locModal.id) await api.customers.updLocation(user.firmId, locModal.id, locModal)
+                  else await api.customers.addLocation(user.firmId, locModal)
+                  setLocModal(null)
+                  await reloadLocations()
+                  showToast('Punct de livrare salvat!')
+                } catch (err) { showToast(err.message, 'error') }
+              }}>Salvează</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delegați tab */}
       {tab === 'delegati' && (

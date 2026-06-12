@@ -26,6 +26,10 @@ export default function ClientRapoarte() {
   const { db } = useStore()
   const navigate = useNavigate()
   const firmId = user.customerId || user.firmId
+  const firma = (db.firms || []).find(f => f.id === firmId)
+  const isEur = firma?.currency === 'EUR'
+  const eurRate = parseFloat(db.exchange?.applied_rate || db.exchange?.rate || 0)
+  const fmtVal = (val) => (isEur && eurRate > 0) ? `${((val || 0) / eurRate).toFixed(2)} EUR` : lei(val)
 
   const myOrders = db.orders.filter(o => o.firmId === firmId)
 
@@ -79,8 +83,8 @@ export default function ClientRapoarte() {
 
       <div className="kpi-grid" style={{ marginBottom: 24 }}>
         <KPI label="Total comenzi" value={myOrders.length} sub={`${stats.livrate.length} livrate`} color="#2563eb" icon="📦" />
-        <KPI label="Valoare totală" value={lei(stats.valTotala)} sub="toate comenzile" color="#16a34a" icon="💰" />
-        <KPI label="Valoare medie" value={lei(stats.valMedie)} sub="per comandă" color="#9333ea" icon="📊" />
+        <KPI label="Valoare totală" value={fmtVal(stats.valTotala)} sub="toate comenzile" color="#16a34a" icon="💰" />
+        <KPI label="Valoare medie" value={fmtVal(stats.valMedie)} sub="per comandă" color="#9333ea" icon="📊" />
         <KPI label="Comenzi active" value={stats.active.length} sub={stats.active.length > 0 ? 'în procesare' : 'nicio comandă activă'} color={stats.active.length > 0 ? '#ea580c' : '#94a3b8'} icon="⚡" />
       </div>
 
@@ -98,7 +102,7 @@ export default function ClientRapoarte() {
               </defs>
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <YAxis hide />
-              <Tooltip formatter={v => [lei(v), 'Valoare']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              <Tooltip formatter={v => [fmtVal(v), 'Valoare']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
               <Area type="monotone" dataKey="val" stroke="#2563eb" strokeWidth={2} fill="url(#grad1)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -149,7 +153,7 @@ export default function ClientRapoarte() {
                 <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.product.name}</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.qty.toLocaleString()} {p.product.unitate} comandate</div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{lei(p.val)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{fmtVal(p.val)}</div>
             </div>
           ))}
         </div>
@@ -176,7 +180,7 @@ export default function ClientRapoarte() {
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Comandă rapidă</div>
               <div style={{ fontSize: 13, color: 'var(--text2)' }}>
                 Reia comanda <b>{stats.ultimaComanda.nr}</b> din {fmtDate(stats.ultimaComanda.dataComanda)} —{' '}
-                {stats.ultimaComanda.lines.length} produs(e), {lei(stats.ultimaComanda.total)}
+                {stats.ultimaComanda.lines.length} produs(e), {fmtVal(stats.ultimaComanda.total)}
               </div>
             </div>
             <button className="btn btn-primary"

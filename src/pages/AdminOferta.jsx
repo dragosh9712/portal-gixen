@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { useAuth } from '../AuthContext'
@@ -33,10 +33,13 @@ export default function AdminOferta() {
   const { db, saveOffer, getExchangeRate } = useStore()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const routerLocation = useLocation()
+  // Pre-populare din "Editează pt. alt client" (AdminOferte)
+  const presetProducts = routerLocation.state?.products || []
 
   const [step, setStep] = useState(1)
   const [selectedFirmId, setSelectedFirmId] = useState('')
-  const [selectedProducts, setSelectedProducts] = useState([])
+  const [selectedProducts, setSelectedProducts] = useState(presetProducts)
   const [valabilitate, setValabilitate] = useState(15)
   const [observatii, setObservatii] = useState('')
   const [offerNr] = useState(genNr())

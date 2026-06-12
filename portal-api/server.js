@@ -108,8 +108,28 @@ async function runMigrations() {
   const { query } = require('./db')
   try {
     await query(`IF COL_LENGTH('customers','newsletter_opt_in') IS NULL ALTER TABLE customers ADD newsletter_opt_in BIT DEFAULT 0`)
+    await query(`IF COL_LENGTH('customers','adresa_livrare') IS NULL ALTER TABLE customers ADD adresa_livrare NVARCHAR(500)`)
+    await query(`IF COL_LENGTH('customers','program_livrare') IS NULL ALTER TABLE customers ADD program_livrare NVARCHAR(150)`)
+    await query(`IF COL_LENGTH('customers','email_documente') IS NULL ALTER TABLE customers ADD email_documente NVARCHAR(255)`)
+    await query(`IF COL_LENGTH('customers','iban') IS NULL ALTER TABLE customers ADD iban NVARCHAR(50)`)
+    await query(`IF COL_LENGTH('customers','banca') IS NULL ALTER TABLE customers ADD banca NVARCHAR(150)`)
+    await query(`IF COL_LENGTH('customers','site_web') IS NULL ALTER TABLE customers ADD site_web NVARCHAR(255)`)
     await query(`IF COL_LENGTH('products','specs_json') IS NULL ALTER TABLE products ADD specs_json NVARCHAR(MAX)`)
     await query(`IF COL_LENGTH('products','datasheet_url') IS NULL ALTER TABLE products ADD datasheet_url NVARCHAR(500)`)
+    await query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='customer_locations')
+      CREATE TABLE customer_locations (
+        id VARCHAR(64) PRIMARY KEY,
+        customer_id VARCHAR(64) NOT NULL,
+        name NVARCHAR(255),
+        address NVARCHAR(500),
+        locality NVARCHAR(150),
+        county NVARCHAR(100),
+        contact_phone NVARCHAR(50),
+        program NVARCHAR(150),
+        is_default BIT DEFAULT 0,
+        created_at DATETIME2 DEFAULT SYSDATETIME()
+      )`)
     await query(`
       IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='promo_banners')
       CREATE TABLE promo_banners (
@@ -127,8 +147,37 @@ async function runMigrations() {
   } catch (e) { console.error('[migrations] Error:', e.message) }
 }
 
-app.listen(PORT, () => {
-  console.log(`\n Gixen Portal API running on port ${PORT}`)
+// ── HTTPS opțional ──
+// Setează în .env: SSL_KEY_PATH + SSL_CERT_PATH (PEM). Dacă lipsesc → HTTP simplu.
+// HTTPS_PORT (default 443). Când HTTPS e activ, portul HTTP redirecționează către HTTPS.
+function startServer(onReady) {
+  const keyPath  = process.env.SSL_KEY_PATH
+  const certPath = process.env.SSL_CERT_PATH
+  if (keyPath && certPath && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    const https = require('https')
+    const httpsPort = parseInt(process.env.HTTPS_PORT) || 443
+    const options = { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }
+    https.createServer(options, app).listen(httpsPort, () => {
+      console.log(`\n Gixen Portal API running on HTTPS port ${httpsPort}`)
+      onReady()
+    })
+    // HTTP → HTTPS redirect pe portul vechi
+    const http = require('http')
+    http.createServer((req, res) => {
+      const host = (req.headers.host || '').replace(/:\d+$/, '')
+      res.writeHead(301, { Location: `https://${host}${httpsPort !== 443 ? ':' + httpsPort : ''}${req.url}` })
+      res.end()
+    }).listen(PORT, () => console.log(`   HTTP :${PORT} → redirect HTTPS :${httpsPort}`))
+  } else {
+    app.listen(PORT, () => {
+      console.log(`\n Gixen Portal API running on HTTP port ${PORT}`)
+      if (keyPath || certPath) console.warn('   ⚠ SSL_KEY_PATH/SSL_CERT_PATH setate dar fișierele nu există — rulează pe HTTP')
+      onReady()
+    })
+  }
+}
+
+startServer(() => {
   runMigrations()
   console.log(`   Health: http://localhost:${PORT}/api/health`)
   console.log(`   Env: ${process.env.NODE_ENV || 'development'}\n`)

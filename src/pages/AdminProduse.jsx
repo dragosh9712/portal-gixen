@@ -462,12 +462,34 @@ export default function AdminProduse() {
 
                   {!isNew && (
                     <>
-                      <div className="section-title" style={{ marginBottom: 10, marginTop: 20 }}>Fișă tehnică</div>
+                      <div className="section-title" style={{ marginBottom: 10, marginTop: 20 }}>Fișă tehnică (PDF)</div>
                       <div className="form-group" style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 12, color: 'var(--text2)' }}>URL Fișă tehnică (PDF)</label>
-                        <input type="text" value={editForm.datasheet_url || ''} style={{ width: '100%' }}
-                          onChange={e => setEditForm(p => ({ ...p, datasheet_url: e.target.value }))}
-                          placeholder="https://..." />
+                        {editForm.datasheet_url ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary btn-sm" type="button"
+                              onClick={() => window.open(editForm.datasheet_url, '_blank')}>📄 Vizualizează PDF</button>
+                            <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--red)' }}
+                              onClick={async () => {
+                                try {
+                                  await api.products.deleteDatasheet(selected.id)
+                                  setEditForm(p => ({ ...p, datasheet_url: null }))
+                                } catch (err) { alert(err.message) }
+                              }}>✕ Șterge</button>
+                          </div>
+                        ) : (
+                          <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                            📤 Încarcă fișă tehnică PDF
+                            <input type="file" accept=".pdf" style={{ display: 'none' }}
+                              onChange={async e => {
+                                const file = e.target.files[0]
+                                if (!file) return
+                                try {
+                                  const r = await api.products.uploadDatasheet(selected.id, file)
+                                  setEditForm(p => ({ ...p, datasheet_url: r.datasheet_url }))
+                                } catch (err) { alert(err.message) }
+                              }} />
+                          </label>
+                        )}
                       </div>
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

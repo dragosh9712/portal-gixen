@@ -62,6 +62,12 @@ const api = {
       return req('POST', `/api/upload/product-image/${productId}`, form, true)
     },
     deleteImage: id            => req('DELETE', `/api/upload/product-image/${id}`),
+    uploadDatasheet: async (productId, file) => {
+      const form = new FormData()
+      form.append('datasheet', file)
+      return req('POST', `/api/upload/product-datasheet/${productId}`, form, true)
+    },
+    deleteDatasheet: id        => req('DELETE', `/api/upload/product-datasheet/${id}`),
   },
   customers: {
     list:     ()               => req('GET',  '/api/customers'),
@@ -73,9 +79,14 @@ const api = {
     setCredit:   (id, data)       => req('PUT',  `/api/credit/${id}`, data),
     addDelegate: (id, data)       => req('POST', `/api/customers/${id}/delegate`, data),
     delegates:   id               => req('GET',  `/api/customers/${id}/delegates`),
+    locations:    id               => req('GET',    `/api/customers/${id}/locations`),
+    addLocation:  (id, data)       => req('POST',   `/api/customers/${id}/locations`, data),
+    updLocation:  (id, locId, data)=> req('PUT',    `/api/customers/${id}/locations/${locId}`, data),
+    delLocation:  (id, locId)      => req('DELETE', `/api/customers/${id}/locations/${locId}`),
     notes:       id               => req('GET',  `/api/customers/${id}/notes`),
     addNote:     (id, text)       => req('POST', `/api/customers/${id}/notes`, { text }),
     delNote:     (id, noteId)     => req('DELETE', `/api/customers/${id}/notes/${noteId}`),
+    surveyReminder: id            => req('POST', `/api/customers/${id}/survey-reminder`),
   },
   selectsoft: {
     test:          () => req('GET',  '/api/selectsoft/test'),
@@ -150,6 +161,11 @@ const api = {
     create: data               => req('POST', '/api/banners', data),
     update: (id, data)         => req('PUT',  `/api/banners/${id}`, data),
     remove: id                 => req('DELETE',`/api/banners/${id}`),
+    uploadImage: async (file) => {
+      const form = new FormData()
+      form.append('image', file)
+      return req('POST', '/api/upload/banner-image', form, true)
+    },
   },
 }
 

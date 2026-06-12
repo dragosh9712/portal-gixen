@@ -16,23 +16,35 @@ export default function Dashboard() {
   const [showBanners, setShowBanners] = useState(false)
 
   useEffect(() => {
-    if (user?.needsSurvey) setShowSurvey(true)
-  }, [user])
+    if (user?.needsSurvey) { setShowSurvey(true); return }
+    // Trigger "mereu până la completare": dacă există survey activ de acest tip
+    // și firma nu a completat încă, popup la fiecare vizită pe dashboard
+    if (user?.role !== 'admin') {
+      const cid = user?.customerId || user?.firmId
+      const myFirm = (db.firms || []).find(f => f.id === cid)
+      const persistent = (db.surveys || []).some(s => s.is_active && s.trigger_on === 'until_completed')
+      if (persistent && myFirm && !myFirm.survey_completed) setShowSurvey(true)
+    }
+  }, [user, db.surveys, db.firms])
 
   useEffect(() => {
     if (db.banners.length > 0 && user?.role !== 'admin') setShowBanners(true)
   }, [db.banners, user])
 
   const clientId = user.customerId || user.firmId || null
+  const firma = (db.firms || []).find(f => f.id === clientId)
+  const isEur = firma?.currency === 'EUR'
+  const eurRate = parseFloat(db.exchange?.applied_rate || db.exchange?.rate || 0)
+  const fmtVal = (val) => (isEur && eurRate > 0) ? `${((val || 0) / eurRate).toFixed(2)} EUR` : lei(val)
   const myOrders = db.orders.filter(o => o.firmId === clientId || o.customer_id === clientId)
 
   const kpi = useMemo(() => {
     const thisMonth = new Date().toISOString().slice(0, 7)
     const luna = myOrders.filter(o => (o.dataComanda || o.created_at || '').startsWith(thisMonth))
     const active = myOrders.filter(o => ['plasata','in_aprobare','aprobata','in_procesare'].includes(o.status))
-    // Valori CU TVA (order.total e stocat net)
-    const total = myOrders.reduce((s, o) => s + cuTva(o.total), 0)
-    const valLuna = luna.reduce((s, o) => s + cuTva(o.total), 0)
+    // order.total = gross_total (deja CU TVA) — nu se mai aplică cuTva()
+    const total = myOrders.reduce((s, o) => s + (o.total || 0), 0)
+    const valLuna = luna.reduce((s, o) => s + (o.total || 0), 0)
     return { total: myOrders.length, active: active.length, valLuna, valTotal: total }
   }, [myOrders])
 
@@ -46,7 +58,7 @@ export default function Dashboard() {
       const label = d.toLocaleDateString('ro-RO', { month: 'short' })
       const val = myOrders
         .filter(o => (o.dataComanda || o.created_at || '').startsWith(key))
-        .reduce((s, o) => s + cuTva(o.total), 0)
+        .reduce((s, o) => s + (o.total || 0), 0)
       months.push({ label, val: Math.round(val) })
     }
     return months
@@ -82,7 +94,7 @@ export default function Dashboard() {
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Valoare totală</div>
-          <div className="kpi-val" style={{ fontSize: 18 }}>{lei(kpi.valTotal)}</div>
+          <div className="kpi-val" style={{ fontSize: 18 }}>{fmtVal(kpi.valTotal)}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">În curs</div>
@@ -91,7 +103,7 @@ export default function Dashboard() {
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Luna aceasta</div>
-          <div className="kpi-val" style={{ fontSize: 18 }}>{lei(kpi.valLuna)}</div>
+          <div className="kpi-val" style={{ fontSize: 18 }}>{fmtVal(kpi.valLuna)}</div>
         </div>
       </div>
 

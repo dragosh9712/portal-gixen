@@ -58,6 +58,58 @@ export default function AdminOferte() {
     showToast('Ofertă ștearsă.')
   }
 
+  // Deschide oferta într-o fereastră de print → utilizatorul salvează ca PDF
+  function handlePrintPdf(offer) {
+    const rows = (offer.linii || []).map(l => {
+      const prod = db.products.find(p => p.id === l.productId)
+      return `<tr>
+        <td>${prod?.name || l.productId}</td>
+        <td style="text-align:center">${l.cantitate} ${l.unitateSel || ''}</td>
+        <td style="text-align:right">${(l.pretUnitar || 0).toFixed(2)} RON</td>
+        <td style="text-align:right"><b>${(l.total || 0).toFixed(2)} RON</b></td>
+      </tr>`
+    }).join('')
+    const discRows = (offer.discountLinii || []).map(d =>
+      `<tr style="color:#15803d"><td colspan="3" style="font-style:italic;padding-left:24px">└ ${d.eticheta || 'Discount'}</td><td style="text-align:right">${(d.valoare || 0).toFixed(2)} RON</td></tr>`
+    ).join('')
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ofertă ${offer.nr}</title>
+      <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 24px auto; color: #0f172a; font-size: 13px; }
+        h1 { font-size: 22px; color: #21376c; margin-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th { background: #21376c; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; }
+        td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; }
+        .totals { margin-top: 16px; margin-left: auto; width: 280px; }
+        .totals div { display: flex; justify-content: space-between; padding: 4px 0; }
+        .totals .big { font-size: 16px; font-weight: 700; border-top: 2px solid #21376c; padding-top: 8px; }
+        .meta { color: #64748b; font-size: 12px; }
+        @media print { body { margin: 0; } }
+      </style></head><body>
+      <h1>GIXEN — Ofertă comercială</h1>
+      <div class="meta">Nr. ${offer.nr} · Emisă: ${offer.dataEmitere || ''} · Valabilă până la: ${offer.dataExpirare || ''}</div>
+      <div class="meta" style="margin-top:8px"><b>Client:</b> ${offer.clientName || '—'}</div>
+      <table>
+        <thead><tr><th>Produs</th><th style="text-align:center">Cantitate</th><th style="text-align:right">Preț/rolă fără TVA</th><th style="text-align:right">Total</th></tr></thead>
+        <tbody>${rows}${discRows}</tbody>
+      </table>
+      <div class="totals">
+        <div><span>Total net (fără TVA)</span><span>${(offer.totalNet || 0).toFixed(2)} RON</span></div>
+        <div><span>TVA 21%</span><span>${(offer.tva || 0).toFixed(2)} RON</span></div>
+        <div class="big"><span>Total cu TVA</span><span>${(offer.totalCuTva || 0).toFixed(2)} RON</span></div>
+      </div>
+      ${offer.observatii ? `<p class="meta" style="margin-top:20px"><b>Observații:</b> ${offer.observatii}</p>` : ''}
+      <script>window.onload = () => setTimeout(() => window.print(), 300)</` + `script>
+      </body></html>`
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close() }
+  }
+
+  // Editează oferta pentru alt client — preîncarcă produsele în generator
+  function handleEditForClient(offer) {
+    const productIds = offer.products_selected || (offer.linii || []).map(l => l.productId)
+    navigate('/admin/oferta', { state: { products: productIds, fromOffer: offer.nr } })
+  }
+
   const totalOferte = (db.offers || []).length
   const totalValoare = (db.offers || [])
     .filter(o => o.status !== 'anulata')
@@ -145,6 +197,8 @@ export default function AdminOferte() {
                       <td><span className={`badge ${sc.cls}`}>{sc.label}</span></td>
                       <td onClick={e => e.stopPropagation()}>
                         <div className="flex gap-8">
+                          <button className="btn btn-secondary btn-sm" onClick={() => handlePrintPdf(offer)} title="Salvează / printează PDF">🖨</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => handleEditForClient(offer)} title="Editează pentru alt client">✎</button>
                           <button className="btn btn-secondary btn-sm" onClick={() => handleCopy(offer)} title="Copiază pentru client nou">
                             ⧉ Copiază
                           </button>
@@ -226,6 +280,8 @@ export default function AdminOferte() {
             </div>
 
             <div className="modal-footer">
+              <button className="btn btn-secondary btn-sm" onClick={() => handlePrintPdf(selected)}>🖨 Salvează PDF</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleEditForClient(selected)}>✎ Editează pt. alt client</button>
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopy(selected)}>⧉ Copiază ofertă</button>
               {selected.status === 'emisa' && (
                 <>

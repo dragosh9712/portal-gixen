@@ -18,6 +18,10 @@ export default function ComenzileMele() {
   const [selected, setSelected] = useState(null)
 
   const clientId = user.customerId || user.firmId || null
+  const firma = (db.firms || []).find(f => f.id === clientId)
+  const isEur = firma?.currency === 'EUR'
+  const eurRate = parseFloat(db.exchange?.applied_rate || db.exchange?.rate || 0)
+  const fmtVal = (val) => (isEur && eurRate > 0) ? `${((val || 0) / eurRate).toFixed(2)} EUR` : lei(val)
   const myOrders = db.orders.filter(o => o.firmId === clientId || o.customer_id === clientId)
   const filtered = myOrders.filter(o => {
     const matchStatus = filterStatus === 'toate' || o.status === filterStatus
@@ -63,7 +67,7 @@ export default function ComenzileMele() {
                     </td>
                     <td>{fmtDate(order.dataComanda)}</td>
                     <td style={{ color: 'var(--text2)' }}>{order.lines.length} linie{order.lines.length !== 1 ? 'i' : ''}</td>
-                    <td><b>{lei(order.total)}</b></td>
+                    <td><b>{fmtVal(order.total)}</b></td>
                     <td>{statusBadge(order.status)}</td>
                     <td>{fmtDate(order.dataLivrare)}</td>
                     <td>{order.nrFactura ? <span style={{ fontSize: 12, color: 'var(--blue)', cursor: 'pointer' }}>📄 {order.nrFactura}</span> : <span style={{ color: 'var(--text3)', fontSize: 12 }}>—</span>}</td>
@@ -131,10 +135,10 @@ export default function ComenzileMele() {
                       </td>
                       <td style={{fontSize:12,color:'var(--text2)'}}>{l.uom_code || l.unitateSel || '—'}</td>
                       <td>{l.cantitate}</td>
-                      <td className="text-right">{lei(l.pretUnitar)}</td>
-                      <td className="text-right" style={{color:'var(--text3)'}}>{lei(tva)}</td>
-                      <td className="text-right">{lei(pretCuTva)}</td>
-                      <td className="text-right"><b>{lei(totalLineCuTva)}</b></td>
+                      <td className="text-right">{fmtVal(l.pretUnitar)}</td>
+                      <td className="text-right" style={{color:'var(--text3)'}}>{fmtVal(tva)}</td>
+                      <td className="text-right">{fmtVal(pretCuTva)}</td>
+                      <td className="text-right"><b>{fmtVal(totalLineCuTva)}</b></td>
                     </tr>
                   )
                 })}
@@ -147,13 +151,16 @@ export default function ComenzileMele() {
               const discount = Math.round((netFinal - subtotalLinii) * 100) / 100
               return (
                 <div className="summary-box" style={{ marginTop: 12 }}>
-                  <div className="summary-line"><span>Subtotal fără TVA</span><span>{lei(subtotalLinii)}</span></div>
+                  <div className="summary-line"><span>Subtotal fără TVA</span><span>{fmtVal(subtotalLinii)}</span></div>
                   {discount !== 0 && (
-                    <div className="summary-line" style={{ color: 'var(--green-text)' }}><span>Discount</span><span>{lei(discount)}</span></div>
+                    <div className="summary-line" style={{ color: 'var(--green-text)' }}><span>Discount</span><span>{fmtVal(discount)}</span></div>
                   )}
-                  <div className="summary-line"><span>Net fără TVA</span><span>{lei(netFinal)}</span></div>
-                  <div className="summary-line"><span>TVA 21%</span><span>{lei(tvaVal(netFinal))}</span></div>
-                  <div className="summary-line total"><span>Total cu TVA</span><span>{leiCuTva(netFinal)}</span></div>
+                  <div className="summary-line"><span>Net fără TVA</span><span>{fmtVal(netFinal)}</span></div>
+                  <div className="summary-line"><span>TVA 21%</span><span>{fmtVal(tvaVal(netFinal))}</span></div>
+                  <div className="summary-line total"><span>Total cu TVA</span><span>{fmtVal(cuTva(netFinal))}</span></div>
+                  {isEur && eurRate > 0 && (
+                    <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>echivalent {lei(cuTva(netFinal))} · curs {eurRate.toFixed(4)}</div>
+                  )}
                 </div>
               )
             })()}

@@ -160,23 +160,37 @@ export default function Produse() {
                   )
                 })()}
 
-                {/* Specificații tehnice */}
+                {/* Specificații tehnice + PDF sub ele */}
                 {(() => {
                   const specs = selected.specs_json ? (typeof selected.specs_json === 'string' ? (() => { try { return JSON.parse(selected.specs_json) } catch { return [] } })() : selected.specs_json) : []
-                  if (!specs?.length) return null
+                  if (!specs?.length && !selected.datasheet_url) return null
                   return (
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Specificații</div>
-                      <table style={{ fontSize: 12, width: '100%' }}>
-                        <tbody>
-                          {specs.map((s, i) => (
-                            <tr key={i}>
-                              <td style={{ color: 'var(--text3)', paddingRight: 10, paddingBottom: 3, whiteSpace: 'nowrap' }}>{s.key}</td>
-                              <td style={{ fontWeight: 500 }}>{s.value}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      {specs?.length > 0 && (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Specificații</div>
+                          <table style={{ fontSize: 12, width: '100%' }}>
+                            <tbody>
+                              {specs.map((s, i) => (
+                                <tr key={i}>
+                                  <td style={{ color: 'var(--text3)', paddingRight: 10, paddingBottom: 3, whiteSpace: 'nowrap' }}>{s.key}</td>
+                                  <td style={{ fontWeight: 500 }}>{s.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      )}
+                      {selected.datasheet_url && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => window.open(selected.datasheet_url, '_blank')}>
+                            👁 Vizualizează fișa
+                          </button>
+                          <a className="btn btn-ghost btn-sm" href={selected.datasheet_url} download style={{ textDecoration: 'none' }}>
+                            📥 Descarcă
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )
                 })()}
@@ -209,15 +223,6 @@ export default function Produse() {
                 </div>
               )
             })()}
-
-            {/* PDF datasheet */}
-            {selected.datasheet_url && (
-              <div style={{ marginBottom: 14 }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => window.open(selected.datasheet_url, '_blank')}>
-                  📥 Descarcă / vizualizează fișa tehnică
-                </button>
-              </div>
-            )}
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelected(null)}>Închide</button>

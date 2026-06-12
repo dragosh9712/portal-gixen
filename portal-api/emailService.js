@@ -133,6 +133,19 @@ async function sendPasswordReset(email, resetLink) {
   await send(email, 'Resetare parolă — Gixen Portal B2B', html).catch(() => {})
 }
 
+async function sendSurveyReminder(email, firmName) {
+  const appUrl = process.env.APP_URL || ''
+  const html = wrap('Completează profilul firmei tale', `
+    <p style="color:#444;line-height:1.7">Bună ziua,</p>
+    <p style="color:#444;line-height:1.7">Pentru a vă oferi cele mai potrivite produse și condiții comerciale, vă rugăm să completați scurtul chestionar de profil pentru firma <strong>${firmName}</strong>.</p>
+    <p style="color:#444;line-height:1.7">Durează mai puțin de 2 minute și se face direct din portal, la prima logare.</p>
+    ${appUrl ? `<div style="text-align:center;margin:24px 0">
+      <a href="${appUrl}/dashboard" style="display:inline-block;background:#1a6bbf;color:#fff;text-decoration:none;padding:12px 28px;border-radius:7px;font-weight:700;font-size:14px">Completează acum</a>
+    </div>` : ''}
+    <p style="color:#999;font-size:12px">Vă mulțumim! Echipa Gixen.</p>`)
+  await send(email, 'Reminder: completează profilul firmei — Gixen Portal', html)
+}
+
 module.exports = {
   sendOnboardingPending,
   sendOnboardingApproved,
@@ -141,4 +154,5 @@ module.exports = {
   sendOrderStatusChanged,
   sendCreditLimitWarning,
   sendPasswordReset,
+  sendSurveyReminder,
 }

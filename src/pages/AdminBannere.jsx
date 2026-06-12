@@ -90,8 +90,30 @@ export default function AdminBannere() {
                 <textarea rows={4} value={form.description} onChange={e => f('description', e.target.value)} placeholder="Text mesaj..." style={{ width: '100%' }} />
               </div>
               <div>
-                <label className="label">URL imagine</label>
-                <input type="text" value={form.image_url} onChange={e => f('image_url', e.target.value)} placeholder="https://..." />
+                <label className="label">Imagine banner</label>
+                {form.image_url ? (
+                  <div>
+                    <img src={form.image_url} alt="" style={{ maxWidth: '100%', maxHeight: 140, borderRadius: 8, objectFit: 'cover', marginBottom: 6 }}
+                      onError={e => e.target.style.display = 'none'} />
+                    <div>
+                      <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--red)' }}
+                        onClick={() => f('image_url', '')}>✕ Șterge imaginea</button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                    📤 Încarcă imagine
+                    <input type="file" accept="image/*" style={{ display: 'none' }}
+                      onChange={async e => {
+                        const file = e.target.files[0]
+                        if (!file) return
+                        try {
+                          const r = await api.banners.uploadImage(file)
+                          f('image_url', r.image_url)
+                        } catch (err) { alert(err.message) }
+                      }} />
+                  </label>
+                )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
@@ -104,8 +126,33 @@ export default function AdminBannere() {
                 </div>
               </div>
               <div>
-                <label className="label">Grupuri client (all / standard,gold,platinum)</label>
-                <input type="text" value={form.show_to_groups} onChange={e => f('show_to_groups', e.target.value)} placeholder="all" />
+                <label className="label">Grupuri de clienți</label>
+                {(() => {
+                  const ALL_GROUPS = ['standard', 'gold', 'platinum']
+                  const selectedGroups = form.show_to_groups === 'all' || !form.show_to_groups
+                    ? [] : form.show_to_groups.split(',').map(g => g.trim()).filter(Boolean)
+                  const isAll = !selectedGroups.length
+                  const toggle = (g) => {
+                    const next = selectedGroups.includes(g)
+                      ? selectedGroups.filter(x => x !== g)
+                      : [...selectedGroups, g]
+                    f('show_to_groups', next.length ? next.join(',') : 'all')
+                  }
+                  return (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, padding: '4px 12px', borderRadius: 20, background: isAll ? 'var(--blue-bg)' : 'var(--bg3)', border: '1px solid ' + (isAll ? 'var(--blue)' : 'var(--border)'), color: isAll ? 'var(--blue-text)' : 'var(--text2)' }}>
+                        <input type="checkbox" checked={isAll} onChange={() => f('show_to_groups', 'all')} style={{ width: 12, height: 12 }} />
+                        Toți clienții
+                      </label>
+                      {ALL_GROUPS.map(g => (
+                        <label key={g} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, padding: '4px 12px', borderRadius: 20, background: selectedGroups.includes(g) ? 'var(--blue-bg)' : 'var(--bg3)', border: '1px solid ' + (selectedGroups.includes(g) ? 'var(--blue)' : 'var(--border)'), color: selectedGroups.includes(g) ? 'var(--blue-text)' : 'var(--text2)', textTransform: 'capitalize' }}>
+                          <input type="checkbox" checked={selectedGroups.includes(g)} onChange={() => toggle(g)} style={{ width: 12, height: 12 }} />
+                          {g}
+                        </label>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="checkbox" id="chk-active" checked={form.is_active} onChange={e => f('is_active', e.target.checked)} />

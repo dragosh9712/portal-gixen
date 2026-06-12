@@ -274,17 +274,9 @@ SELECTSOFT_PUSH_ORDERS=false         # true = trimite automat comenzile în SS
 - [ ] **Selectsoft CON→CMC**: Contactat suport SS (+40 374 490 844) să schimbe tipul documentului `insertcom` din CON în CMC
 
 ### În lucru / de implementat
-- [ ] **PDF datasheet upload** — upload direct pe card admin produs, nu URL
-- [ ] **Bannere upload imagine** — upload direct în loc de URL
+- [ ] **Gestiuni** — doar 'depozit' (nu ridicata/amănunt), extensibil — de identificat UI-ul existent și de simplificat
+- [ ] **Mărci permise** — dacă nu se mai folosesc checkboxurile pe client, de ascuns din AdminClienti
 - [ ] **Favorite cu tabelă DB** — momentan în localStorage; dacă se cere persistență cross-device, adăugăm tabelă `favorites`
-- [ ] **Locații livrare multiple per client** — clientul să poată adăuga/gestiona mai multe adrese în Profil și să le selecteze la comandă
-- [ ] **EUR complet** — clienți cu `currency=EUR` să vadă prețurile în EUR pretutindeni (cards, coș, comenzi)
-- [ ] **Oferte emise PDF** — save/view/edit PDF complet
-- [ ] **Survey reminder funcțional** — butonul trimite email real (nu toast fake)
-- [ ] **Gestiuni** — tabela `gestiuni` cu tip 'depozit', extensibilă (nu mai e ridicata/amănunt)
-- [ ] **HTTPS** — migrare la HTTPS; opțiuni: Nginx reverse-proxy cu cert Let's Encrypt sau cert self-signed pe rețea internă
-- [ ] **Curs valutar ora corectă** — `SYSDATETIME()` returnează ora serverului; dacă serverul e în altă TZ față de așteptări, soluție: `AT TIME ZONE 'UTC'` în query sau formatare ISO în response
-- [ ] **Reorder funcțional** — precompletează coșul cu produsele din comanda selectată
 
 ### Confirmat OK
 - [x] Proformare plată: folosim `suma_incasari >= suma_cu_tva` din `/restdoc` (nu câmpul `restant`)
@@ -298,3 +290,12 @@ SELECTSOFT_PUSH_ORDERS=false         # true = trimite automat comenzile în SS
 - [x] Specs tehnice: câmpuri `specs_json` + `datasheet_url` pe `products`
 - [x] Bannere promo: tabelă `promo_banners`, pagină AdminBannere, popup la login (doar clienți)
 - [x] Promoții afișaj: filtrate per produs + firma, afișate informativ (fără calcul) în modalul produsului
+- [x] PDF fișă tehnică: upload direct în AdminProduse (`POST /api/upload/product-datasheet/:id`), vizualizare + descărcare în modalul produsului (servit din `/uploads/datasheets/`)
+- [x] Bannere: upload imagine direct (`POST /api/upload/banner-image`) + multi-select grupuri clienți (all/standard/gold/platinum); `/api/banners/active` filtrează după grupul clientului
+- [x] Locații livrare multiple: tabelă `customer_locations`, CRUD în `customers.js` (`/:id/locations`), management în Profil → Livrare, selecție automată la comandă (via `firma.delivery_locations`)
+- [x] Date livrare Profil: PUT customers salvează acum `adresa_livrare`, `program_livrare`, `email_documente`, `iban`, `banca`, `site_web` (coloane auto-create)
+- [x] Selector transport preferat scos din Profil → Livrare (transportul se auto-detectează la comandă)
+- [x] EUR complet: clienți cu `currency=EUR` văd prețuri în EUR în Produse, Favorite, Coș, ComenzileMele, Dashboard, Rapoarte (curs `db.exchange.rate`, RON afișat secundar)
+- [x] Oferte emise: buton 🖨 Salvează PDF (fereastră print → Save as PDF) + ✎ Editează pt. alt client (preîncarcă produsele în generator)
+- [x] Survey: trigger nou `until_completed` (popup la fiecare vizită până completează); buton reminder trimite email real (`POST /api/customers/:id/survey-reminder`, logat în email_log)
+- [x] HTTPS: suport nativ în server.js — setezi `SSL_KEY_PATH`/`SSL_CERT_PATH`/`HTTPS_PORT` în .env; HTTP redirecționează automat la HTTPS. Cert self-signed: `openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes -subj "/CN=portal.gixen.ro"`

@@ -176,6 +176,7 @@ export default function AdminSurvey() {
                 <select className="w-full" value={newSurveyForm.trigger_on} onChange={e=>setNewSurveyForm(p=>({...p,trigger_on:e.target.value}))}>
                   <option value="first_login">Prima logare</option>
                   <option value="on_demand">La cerere</option>
+                  <option value="until_completed">Mereu, până la completare</option>
                 </select>
               </div>
               <div style={{display:'flex',gap:8,marginTop:16}}>
@@ -203,6 +204,7 @@ export default function AdminSurvey() {
                     <select className="w-full" value={editSurvey.trigger_on} onChange={e=>setEditSurvey(p=>({...p,trigger_on:e.target.value}))}>
                       <option value="first_login">Prima logare</option>
                       <option value="on_demand">La cerere</option>
+                      <option value="until_completed">Mereu, până la completare</option>
                     </select>
                   </div>
                   <div className="form-group" style={{display:'flex',alignItems:'center',gap:10}}>

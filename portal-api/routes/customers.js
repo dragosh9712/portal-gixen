@@ -61,11 +61,18 @@ router.get('/', authenticateToken, async (req, res) => {
     await ensureVisibilityColumns()
     const result = await query(`
       SELECT c.*,
-        (SELECT COUNT(*) FROM users u WHERE u.customer_id = c.id AND u.status != 'inactive') AS user_count
+        (SELECT COUNT(*) FROM users u WHERE u.customer_id = c.id AND u.status != 'inactive') AS user_count,
+        (SELECT id, name, address, locality, county, contact_phone, program, is_default
+         FROM customer_locations cl WHERE cl.customer_id = c.id
+         FOR JSON PATH) AS delivery_locations_json
       FROM customers c
       ORDER BY c.created_at DESC
     `)
-    res.json(result.recordset)
+    res.json(result.recordset.map(c => ({
+      ...c,
+      delivery_locations: c.delivery_locations_json ? JSON.parse(c.delivery_locations_json) : [],
+      delivery_locations_json: undefined,
+    })))
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -146,6 +153,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (c.vizibilitate_produse !== undefined){ fields.push('vizibilitate_produse = @viz');    params.viz = c.vizibilitate_produse }
     if (c.paletizare_preferata !== undefined){ fields.push('paletizare_preferata = @palet');  params.palet = c.paletizare_preferata || null }
     if (c.newsletter_opt_in !== undefined)   { fields.push('newsletter_opt_in = @nl');        params.nl = c.newsletter_opt_in ? 1 : 0 }
+
+    // Câmpuri livrare & contact (Profil → tab Livrare)
+    if (c.adresa_livrare !== undefined)   { fields.push('adresa_livrare = @adrLiv');       params.adrLiv = c.adresa_livrare || '' }
+    if (c.program_livrare !== undefined)  { fields.push('program_livrare = @progLiv');     params.progLiv = c.program_livrare || '' }
+    if (c.email_documente !== undefined)  { fields.push('email_documente = @emailDoc');    params.emailDoc = c.email_documente || '' }
+    if (c.iban !== undefined)             { fields.push('iban = @iban');                   params.iban = c.iban || '' }
+    if (c.banca !== undefined)            { fields.push('banca = @banca');                 params.banca = c.banca || '' }
+    if (c.site_web !== undefined)         { fields.push('site_web = @siteWeb');            params.siteWeb = c.site_web || '' }
 
     if (fields.length > 0) {
       await query(`UPDATE customers SET ${fields.join(', ')} WHERE id = @id`, params)
@@ -337,6 +352,96 @@ router.get('/email-log/all', authenticateToken, requireAdmin, async (req, res) =
        ORDER BY el.sent_at DESC`
     )
     res.json(result.recordset)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/customers/:id/survey-reminder — trimite reminder real pe email
+router.post('/:id/survey-reminder', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await query('SELECT name, email, contact_email FROM customers WHERE id = @id', { id: req.params.id })
+    const cust = result.recordset[0]
+    if (!cust) return res.status(404).json({ error: 'Client inexistent' })
+    const to = cust.contact_email || cust.email
+    if (!to) return res.status(400).json({ error: 'Clientul nu are email setat' })
+    await emailSvc.sendSurveyReminder(to, cust.name)
+    await logEmail(req.params.id, to, 'survey_reminder')
+    res.json({ ok: true, message: `Reminder trimis către ${to}` })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ── Locații de livrare multiple per client ──
+// GET /api/customers/:id/locations
+router.get('/:id/locations', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT * FROM customer_locations WHERE customer_id = @id ORDER BY is_default DESC, created_at',
+      { id: req.params.id }
+    )
+    res.json(result.recordset)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/customers/:id/locations — adăugare locație (client sau admin)
+router.post('/:id/locations', authenticateToken, async (req, res) => {
+  try {
+    // Clientul poate adăuga locații doar pentru firma proprie
+    if (req.user.role === 'client' && req.user.customerId !== req.params.id) {
+      return res.status(403).json({ error: 'Acces interzis' })
+    }
+    const l = req.body
+    const id = 'loc_' + Date.now()
+    await query(`
+      INSERT INTO customer_locations (id, customer_id, name, address, locality, county, contact_phone, program, is_default)
+      VALUES (@id, @cid, @name, @addr, @loc, @county, @phone, @program, @def)`, {
+      id, cid: req.params.id,
+      name: l.name || 'Punct de livrare', addr: l.address || '',
+      loc: l.locality || '', county: l.county || '',
+      phone: l.contact_phone || '', program: l.program || '',
+      def: l.is_default ? 1 : 0,
+    })
+    if (l.is_default) {
+      await query('UPDATE customer_locations SET is_default = 0 WHERE customer_id = @cid AND id != @id',
+        { cid: req.params.id, id })
+    }
+    res.status(201).json({ id, message: 'Locație adăugată' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// PUT /api/customers/:id/locations/:locId — editare locație
+router.put('/:id/locations/:locId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role === 'client' && req.user.customerId !== req.params.id) {
+      return res.status(403).json({ error: 'Acces interzis' })
+    }
+    const l = req.body
+    await query(`
+      UPDATE customer_locations SET
+        name = @name, address = @addr, locality = @loc, county = @county,
+        contact_phone = @phone, program = @program, is_default = @def
+      WHERE id = @locId AND customer_id = @cid`, {
+      locId: req.params.locId, cid: req.params.id,
+      name: l.name || 'Punct de livrare', addr: l.address || '',
+      loc: l.locality || '', county: l.county || '',
+      phone: l.contact_phone || '', program: l.program || '',
+      def: l.is_default ? 1 : 0,
+    })
+    if (l.is_default) {
+      await query('UPDATE customer_locations SET is_default = 0 WHERE customer_id = @cid AND id != @locId',
+        { cid: req.params.id, locId: req.params.locId })
+    }
+    res.json({ message: 'Locație actualizată' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// DELETE /api/customers/:id/locations/:locId
+router.delete('/:id/locations/:locId', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role === 'client' && req.user.customerId !== req.params.id) {
+      return res.status(403).json({ error: 'Acces interzis' })
+    }
+    await query('DELETE FROM customer_locations WHERE id = @locId AND customer_id = @cid',
+      { locId: req.params.locId, cid: req.params.id })
+    res.json({ message: 'Locație ștearsă' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

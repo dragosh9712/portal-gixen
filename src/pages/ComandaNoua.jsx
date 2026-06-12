@@ -148,8 +148,11 @@ export default function ComandaNoua() {
     return Math.round(pretRola * coef * 100) / 100
   }
 
+  // Curs normalizat — backend trimite { rate }, dar acceptăm și applied_rate
+  const eurRate = parseFloat(exRate?.applied_rate || exRate?.rate || 0)
+
   function fmtVal(val) {
-    if (isEur && exRate) return eur(val / exRate.applied_rate)
+    if (isEur && eurRate > 0) return eur(val / eurRate)
     return lei(val)
   }
 
@@ -241,8 +244,8 @@ export default function ComandaNoua() {
                       {/* Bug 15: clientul NU vede stocul */}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--blue)', fontWeight: 600, marginTop: 1 }}>
-                      {lei(pretUom)} / {(relevantUoms.find(u => u.uom_code === currentUom)?.uom_name || currentUom).toLowerCase()}
-                      {isEur && exRate && <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>({eur(pretUom / exRate.applied_rate)})</span>}
+                      {fmtVal(pretUom)} / {(relevantUoms.find(u => u.uom_code === currentUom)?.uom_name || currentUom).toLowerCase()}
+                      {isEur && eurRate > 0 && <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>({lei(pretUom)})</span>}
                     </div>
                     {/* Mini UoM preview */}
                     <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
@@ -321,15 +324,15 @@ export default function ComandaNoua() {
                     <div key={linie.productId} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border2)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, flex: 1, paddingRight: 8 }}>{linie.produs?.name}</div>
-                        <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{lei(linie.totalBrutLinie)}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtVal(linie.totalBrutLinie)}</div>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                        {linie.cantitate} {uomLabel?.toLowerCase()} × {lei(linie.pretClient)}/rolă
+                        {linie.cantitate} {uomLabel?.toLowerCase()} × {fmtVal(linie.pretClient)}/rolă
                         <span style={{ marginLeft: 6, color: 'var(--text3)' }}>= {linie.cantRole} role</span>
                       </div>
                       {disc.map((d, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--green-text)', marginTop: 2 }}>
-                          <span>{d.eticheta}</span><span>{lei(d.valoare)}</span>
+                          <span>{d.eticheta}</span><span>{fmtVal(d.valoare)}</span>
                         </div>
                       ))}
                     </div>
@@ -338,22 +341,22 @@ export default function ComandaNoua() {
 
                 {discountLinii.filter(d => d.refLinieIdx === -1).map((d, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--green-text)', marginBottom: 4 }}>
-                    <span>{d.eticheta}</span><span>{lei(d.valoare)}</span>
+                    <span>{d.eticheta}</span><span>{fmtVal(d.valoare)}</span>
                   </div>
                 ))}
 
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text3)', marginBottom: 2 }}>
-                    <span>Net fără TVA</span><span>{lei(totalNet)}</span>
+                    <span>Net fără TVA</span><span>{fmtVal(totalNet)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text3)', marginBottom: 4 }}>
-                    <span>TVA 21%</span><span>{lei(Math.round(totalNet * TVA * 100) / 100)}</span>
+                    <span>TVA 21%</span><span>{fmtVal(Math.round(totalNet * TVA * 100) / 100)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 700 }}>
                     <span>Total cu TVA</span>
                     <span style={{ color: 'var(--blue)' }}>{fmtVal(totalCuTva)}</span>
                   </div>
-                  {isEur && exRate && (
+                  {isEur && eurRate > 0 && (
                     <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text3)' }}>{lei(totalCuTva)}</div>
                   )}
                 </div>
@@ -428,7 +431,7 @@ export default function ComandaNoua() {
                 ['Produse', `${liniiCos.length} linii`],
                 ['Transport', autoTransportType === 'Truck' ? 'TIR / Camion' : 'Duba (Van)'],
                 ['Livrare la', selectedDelivery?.name || '—'],
-                ['Net fără TVA', lei(totalNet)],
+                ['Net fără TVA', fmtVal(totalNet)],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                   <span style={{ color: 'var(--text3)' }}>{k}</span>

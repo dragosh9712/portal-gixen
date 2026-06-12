@@ -15,7 +15,21 @@ router.get('/active', authenticateToken, async (req, res) => {
         AND (active_from IS NULL OR active_from <= @today)
         AND (active_until IS NULL OR active_until >= @today)
       ORDER BY created_at DESC`, { today })
-    res.json(result.recordset)
+
+    // Filtrare după grupul clientului (admin vede tot)
+    let banners = result.recordset
+    if (req.user.role === 'client' && req.user.customerId) {
+      try {
+        const c = await query('SELECT customer_group FROM customers WHERE id = @id', { id: req.user.customerId })
+        const group = (c.recordset[0]?.customer_group || '').toLowerCase()
+        banners = banners.filter(b => {
+          const g = (b.show_to_groups || 'all').toLowerCase()
+          if (g === 'all') return true
+          return g.split(',').map(s => s.trim()).includes(group)
+        })
+      } catch { /* fail-open: arată toate */ }
+    }
+    res.json(banners)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
