@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [showSurvey, setShowSurvey] = useState(false)
 
   useEffect(() => {
-    if (user && !user.survey_completed && user.role !== 'admin') setShowSurvey(true)
+    if (user?.needsSurvey) setShowSurvey(true)
   }, [user])
 
   const clientId = user.customerId || user.firmId || null

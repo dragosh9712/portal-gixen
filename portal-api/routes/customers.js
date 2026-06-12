@@ -160,12 +160,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
         `UPDATE users SET status = @status WHERE customer_id = @id`,
         { id: req.params.id, status: c.status }
       )
-      // Send onboarding emails on status change
-      const custResult = await query('SELECT name, email FROM customers WHERE id=@id', { id: req.params.id })
+      // Send onboarding emails on status change — fetch previous status to detect transition
+      const custResult = await query('SELECT name, email, status AS prev_status FROM customers WHERE id=@id', { id: req.params.id })
       const cust = custResult.recordset[0]
       if (cust) {
-        if (c.status === 'activ') {
-          // Trimite email de aprobare doar o singură dată per client
+        if (c.status === 'activ' && cust.prev_status !== 'activ') {
+          // Trimite email de aprobare doar la tranziția spre activ și o singură dată
           wasEmailSent(req.params.id, 'onboarding_approved').then(alreadySent => {
             if (!alreadySent) {
               emailSvc.sendOnboardingApproved(cust.email, cust.name)
