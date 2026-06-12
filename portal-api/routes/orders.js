@@ -62,10 +62,6 @@ async function buildSsPayload(orderId, { proforma = false } = {}) {
     comanda: {
       nr_comanda: o.order_number,
       data_comanda: today,
-      // Tipul de document definit în Selectsoft (la Gixen: CMC = comandă client)
-      tip_document: proforma
-        ? (process.env.SELECTSOFT_PROFORMA_DOC_TYPE || process.env.SELECTSOFT_ORDER_DOC_TYPE || 'CMC')
-        : (process.env.SELECTSOFT_ORDER_DOC_TYPE || 'CMC'),
       tip_plata: o.payment_type === 'OP' ? 'OP' : 'CRD',
       sursa: 'PORTAL_GIXEN',
       valoare_comanda: Math.round((netFinal + tvaFinal) * 100) / 100,
@@ -80,13 +76,25 @@ async function buildSsPayload(orderId, { proforma = false } = {}) {
       date_firma: {
         denumire: cust.name,
         cod_fiscal: cust.tax_id || '',
+        nr_reg_com: cust.trade_register_no || '',
+        platitor_tva: cust.platitor_tva ? 'true' : 'false',
         tara: 'RO',
         judet: cust.county || '',
         localitate: cust.locality || '',
         adresa: cust.address || '',
         email: cust.email || '',
+        telefon: cust.phone || '',
       },
       date_contact: { nume: cust.name, email: cust.email || '', telefon: cust.phone || '' },
+      // Obligatorie pentru persoană juridică (doc API v1.7)
+      adresa_livrare: {
+        nume_persoana: cust.contact_name || cust.name,
+        tara: 'RO',
+        judet: cust.county || '',
+        localitate: cust.locality || '',
+        adresa: o.delivery_address || cust.address || '',
+        telefon: cust.phone || '',
+      },
     },
   }
 }
@@ -106,26 +114,26 @@ async function pushOrderToSelectsoft(orderId, { proforma = false } = {}) {
 }
 
 // ── Verificare plată proformă în Selectsoft ──────────────────────────────────
-// Comanda e considerată plătită când documentul nu mai apare în restanțe.
+// /restdoc returnează DOAR documentele neachitate sau achitate parțial
+// (doc API v1.7: documente[].{nr_comanda, nr_intern, facturat, achitat, restant}).
+// Plătit = documentul nu mai apare în listă SAU are restant <= 0.
 async function checkProformaPayment(orderId) {
   const ss = require('../selectsoftService')
   if (!ss.isConfigured()) return { checked: false, reason: 'Selectsoft neconfigurat' }
   await ensurePaymentColumns()
 
-  const ordRes = await query(`
-    SELECT o.*, c.tax_id FROM orders o
-    JOIN customers c ON o.customer_id = c.id
-    WHERE o.id = @id`, { id: orderId })
+  const ordRes = await query('SELECT * FROM orders WHERE id = @id', { id: orderId })
   const o = ordRes.recordset[0]
   if (!o) return { checked: false, reason: 'Comandă inexistentă' }
   if (!o.proforma_nr_intern) return { checked: false, reason: 'Comanda nu are proformă generată' }
   if (o.payment_status === 'platit') return { checked: true, paid: true }
 
-  const rest = await ss.getRestante({ cod_fiscal: o.tax_id || '' })
-  const restDocs = rest?.result || rest?.documente || rest?.data || []
-  const stillUnpaid = Array.isArray(restDocs) && restDocs.some(d =>
-    String(d.nr_intern) === String(o.proforma_nr_intern)
-  )
+  const rest = await ss.getRestante({ lst_nr_intern: String(o.proforma_nr_intern) })
+  const restDocs = rest?.documente || []
+  const doc = Array.isArray(restDocs)
+    ? restDocs.find(d => String(d.nr_intern) === String(o.proforma_nr_intern))
+    : null
+  const stillUnpaid = doc != null && parseFloat(doc.restant) > 0
 
   if (!stillUnpaid) {
     await query(`
@@ -143,7 +151,7 @@ async function checkProformaPayment(orderId) {
     }
     return { checked: true, paid: true, justConfirmed: true }
   }
-  return { checked: true, paid: false }
+  return { checked: true, paid: false, facturat: doc.facturat, achitat: doc.achitat, restant: doc.restant }
 }
 
 // Monitor periodic — verifică toate comenzile în așteptarea plății

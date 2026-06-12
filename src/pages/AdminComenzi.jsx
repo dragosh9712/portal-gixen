@@ -203,7 +203,9 @@ export default function AdminComenzi() {
                         setSelected(prev => ({ ...prev, paymentStatus: 'platit', status: 'in_aprobare' }))
                         showToast('✓ Plata confirmată în Selectsoft!')
                       } else {
-                        showToast(r.reason || 'Plata nu a fost încă înregistrată în Selectsoft')
+                        showToast(r.reason || (r.restant != null
+                          ? `Neachitat — restant ${r.restant} RON (achitat ${r.achitat || 0})`
+                          : 'Plata nu a fost încă înregistrată în Selectsoft'))
                       }
                     } catch (e) { showToast('Eroare verificare: ' + e.message) }
                   }}>🔄 Verifică plata în SS</button>

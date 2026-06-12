@@ -79,8 +79,16 @@ const getDocumente = (opts = {}) => ssCall('documente', {
 // Poziții document (liniile)
 const getPozitiiDocument = nr_intern => ssCall('pozitiiDocument', { nr_intern })
 
-// Restanțe (documente neachitate)
-const getRestante = (opts = {}) => ssCall('restdoc', opts)
+// Restanțe (documente neachitate sau achitate parțial)
+// Filtre conform doc API v1.7: lst_nr_intern, lst_nr_comanda, campuri
+const getRestante = (opts = {}) => ssCall('restdoc', {
+  ...(opts.lst_nr_intern  ? { lst_nr_intern:  opts.lst_nr_intern }  : {}),
+  ...(opts.lst_nr_comanda ? { lst_nr_comanda: opts.lst_nr_comanda } : {}),
+  ...(opts.campuri        ? { campuri:        opts.campuri }        : {}),
+})
+
+// Înregistrare încasare pe un document (stinge proforma/factura)
+const insertIncasari = incasari => ssCall('insertincas', { incasari })
 
 // Gestiuni & subunități
 const getGestiuni   = () => ssCall('gestiuni', {})
@@ -101,6 +109,7 @@ module.exports = {
   getDocumente,
   getPozitiiDocument,
   getRestante,
+  insertIncasari,
   getGestiuni,
   getSubunitati,
   updateDocument,
