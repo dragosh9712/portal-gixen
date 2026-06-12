@@ -22,9 +22,23 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Deploy artifacts
 portal-gixen-update.zip
 gixen-update-mic.zip
-portal-api/package-lock.json
-portal-api/node_modules/
 gixen-deploy.zip
 gixen-deploy-light.zip
+*.zip
+
+# Env files (conțin credențiale — nu se commitează)
+.env
+.env.local
+portal-api/.env
+
+# Backup / copii vechi
+*-COPIE.*
+portal-api-v14-real/
+
+# Lockfile backend (nu versionam)
+portal-api/package-lock.json
+portal-api/node_modules/
