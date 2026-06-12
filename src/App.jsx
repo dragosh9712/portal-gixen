@@ -28,6 +28,8 @@ const AdminLocatii    = lazy(() => import('./pages/AdminLocatii'))
 const AdminUoM        = lazy(() => import('./pages/AdminUoM'))
 const AdminSurvey     = lazy(() => import('./pages/AdminSurvey'))
 const AdminBannere    = lazy(() => import('./pages/AdminBannere'))
+const Suport          = lazy(() => import('./pages/Suport'))
+const AdminSuport     = lazy(() => import('./pages/AdminSuport'))
 
 function RequireAuth({ children, role }) {
   const { user } = useAuth()
@@ -61,6 +63,7 @@ export default function App() {
           <Route path="/favorite" element={<RequireAuth><Favorite /></RequireAuth>} />
           <Route path="/profil" element={<RequireAuth><Profil /></RequireAuth>} />
           <Route path="/rapoarte" element={<RequireAuth><ClientRapoarte /></RequireAuth>} />
+          <Route path="/suport" element={<RequireAuth><Suport /></RequireAuth>} />
 
           {/* Admin routes */}
           <Route path="/admin/dashboard" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
@@ -78,6 +81,7 @@ export default function App() {
           <Route path="/admin/uom" element={<RequireAuth role="admin"><AdminUoM /></RequireAuth>} />
           <Route path="/admin/survey" element={<RequireAuth role="admin"><AdminSurvey /></RequireAuth>} />
           <Route path="/admin/bannere" element={<RequireAuth role="admin"><AdminBannere /></RequireAuth>} />
+          <Route path="/admin/suport" element={<RequireAuth role="admin"><AdminSuport /></RequireAuth>} />
 
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />

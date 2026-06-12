@@ -38,6 +38,7 @@ app.use('/api/uom',         require('./routes/uom'))
 app.use('/api/surveys',     require('./routes/surveys'))
 app.use('/api/selectsoft',  require('./routes/selectsoft'))
 app.use('/api/banners',    require('./routes/banners'))
+app.use('/api/support',    require('./routes/support'))
 
 // Health check — TREBUIE să fie înainte de catch-all
 app.get('/api/health', async (req, res) => {

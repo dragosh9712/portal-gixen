@@ -20,6 +20,8 @@ async function ensureTable() {
   await query(`IF COL_LENGTH('offers','data_json') IS NULL ALTER TABLE offers ADD data_json NVARCHAR(MAX)`)
   await query(`IF COL_LENGTH('offers','title') IS NULL ALTER TABLE offers ADD title NVARCHAR(255)`)
   await query(`IF COL_LENGTH('offers','updated_at') IS NULL ALTER TABLE offers ADD updated_at DATETIME2 DEFAULT SYSDATETIME()`)
+  // Coloana veche fără default NOT NULL — o facem nullable dacă nu există
+  await query(`IF COL_LENGTH('offers','created_by_user_id') IS NULL ALTER TABLE offers ADD created_by_user_id NVARCHAR(64)`)
 }
 
 // GET /api/offers
@@ -41,14 +43,15 @@ router.post('/', authenticateToken, async (req, res) => {
     const o = req.body
     const id = o.id || ('of_' + Date.now())
     await query(`
-      INSERT INTO offers (id, customer_id, title, status, data_json, created_by)
-      VALUES (@id, @cid, @title, @status, @data, @by)`, {
+      INSERT INTO offers (id, customer_id, title, status, data_json, created_by, created_by_user_id)
+      VALUES (@id, @cid, @title, @status, @data, @by, @uid)`, {
       id,
       cid: o.customer_id || o.firmId || null,
       title: o.title || o.nume || 'Ofertă',
       status: o.status || 'draft',
       data: JSON.stringify(o),
       by: req.user.name || req.user.email,
+      uid: req.user.id || null,
     })
     res.status(201).json({ id, message: 'Ofertă salvată' })
   } catch (err) { res.status(500).json({ error: err.message }) }

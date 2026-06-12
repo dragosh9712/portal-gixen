@@ -156,6 +156,16 @@ const api = {
     create: data               => req('POST', '/api/uom', data),
     update: (id, data)         => req('PUT',  `/api/uom/${id}`, data),
   },
+  support: {
+    list:   ()             => req('GET',  '/api/support'),
+    create: async (data, photo) => {
+      const form = new FormData()
+      Object.entries(data).forEach(([k, v]) => { if (v != null) form.append(k, v) })
+      if (photo) form.append('photo', photo)
+      return req('POST', '/api/support', form, true)
+    },
+    update: (id, data)     => req('PUT',  `/api/support/${id}`, data),
+  },
   banners: {
     active: ()                 => req('GET',  '/api/banners/active'),
     list:   ()                 => req('GET',  '/api/banners'),
