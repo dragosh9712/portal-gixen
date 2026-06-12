@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
-import { lei } from '../utils'
+import { lei, cuTva } from '../utils'
+import { esteActiva } from '../promoEngine.js'
 
 function ProductImage({ src, alt, style }) {
   const [err, setErr] = useState(false)
@@ -136,26 +137,99 @@ export default function Produse() {
             {(() => {
               const { price, coef, uomName } = calcPaletPrice(selected, paletizare)
               const discP = globalDiscount > 0 ? Math.round(price * (1 - globalDiscount) * 100) / 100 : price
+              const pretRola = parseFloat(selected.pretBaza || selected.active_base_price || 0)
               return (
-                <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{uomName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text3)' }}>{coef} role</div>
+                <>
+                  {pretRola > 0 && (
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                      <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '10px 14px', flex: 1, textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 2 }}>Preț / rolă fără TVA</div>
+                        <div style={{ fontSize: 15, fontWeight: 700 }}>{lei(pretRola)}</div>
+                      </div>
+                      <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '10px 14px', flex: 1, textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 2 }}>Preț / rolă cu TVA</div>
+                        <div style={{ fontSize: 15, fontWeight: 700 }}>{lei(cuTva(pretRola))}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{uomName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text3)' }}>{coef} role</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {discP > 0 ? (
+                        <>
+                          <div style={{ fontSize: 18, fontWeight: 700 }}>{lei(discP)}</div>
+                          {globalDiscount > 0 && (
+                            <div style={{ fontSize: 11, color: 'var(--green-text)' }}>
+                              discount {Math.round(globalDiscount * 100)}% aplicat
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: 'var(--text3)' }}>Preț la cerere</div>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {discP > 0 ? (
-                      <>
-                        <div style={{ fontSize: 18, fontWeight: 700 }}>{lei(discP)}</div>
-                        {globalDiscount > 0 && (
-                          <div style={{ fontSize: 11, color: 'var(--green-text)' }}>
-                            discount {Math.round(globalDiscount * 100)}% aplicat
+                </>
+              )
+            })()}
+
+            {(() => {
+              const promotii = (db.promotionRules || []).filter(rule => {
+                if (!esteActiva(rule, firm?.id)) return false
+                const conditii = rule.conditii || []
+                const areConditieProdusConcret = conditii.some(c => c.tip === 'produs_in_cos')
+                if (!areConditieProdusConcret) return true
+                return conditii.some(c => c.tip === 'produs_in_cos' && c.productId === selected.id)
+              })
+              if (!promotii.length) return null
+              return (
+                <div style={{ marginTop: 12 }}>
+                  <div className="section-title" style={{ marginBottom: 8 }}>Promoții active</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {promotii.map(rule => {
+                      const act = rule.actiune || {}
+                      const tipBadge = act.tip === 'procent' ? '%' : act.tip === 'valoric' ? 'RON' : act.tip === 'produs_gratuit' ? '🎁' : '★'
+                      return (
+                        <div key={rule.id} style={{ background: 'var(--orange-bg)', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontWeight: 600, color: 'var(--orange-text)' }}>{rule.name || rule.tip || 'Promoție'}</span>
+                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 10, background: 'var(--orange-text)', color: '#fff' }}>{tipBadge}</span>
                           </div>
-                        )}
-                      </>
-                    ) : (
-                      <div style={{ fontSize: 13, color: 'var(--text3)' }}>Preț la cerere</div>
-                    )}
+                          {rule.description && <div style={{ color: 'var(--text2)', fontSize: 12 }}>{rule.description}</div>}
+                        </div>
+                      )
+                    })}
                   </div>
+                </div>
+              )
+            })()}
+
+            {(() => {
+              const specs = selected.specs_json ? (typeof selected.specs_json === 'string' ? JSON.parse(selected.specs_json) : selected.specs_json) : null
+              if (!specs?.length && !selected.datasheet_url) return null
+              return (
+                <div style={{ marginTop: 12 }}>
+                  <div className="section-title" style={{ marginBottom: 8 }}>Specificații tehnice</div>
+                  {specs?.length > 0 && (
+                    <table style={{ marginBottom: 10 }}>
+                      <tbody>
+                        {specs.map((s, i) => (
+                          <tr key={i}>
+                            <td style={{ color: 'var(--text3)', fontSize: 12, width: '40%' }}>{s.key}</td>
+                            <td style={{ fontWeight: 500, fontSize: 13 }}>{s.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {selected.datasheet_url && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => window.open(selected.datasheet_url, '_blank')}>
+                      📥 Descarcă fișa tehnică
+                    </button>
+                  )}
                 </div>
               )
             })()}

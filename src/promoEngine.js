@@ -69,7 +69,7 @@ export function getPretPentruClient(produs, firma, db) {
 }
 
 // ── Verificare regulă activă (+ filtru client) ──
-function esteActiva(rule, customerId) {
+export function esteActiva(rule, customerId) {
   if (!rule.activ) return false
   const azi = TODAY()
   const start = normalizeDate(rule.restrictii?.dataStart)

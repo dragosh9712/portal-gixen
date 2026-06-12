@@ -370,11 +370,21 @@ export default function AdminOferta() {
                           {promoAplic.length === 0
                             ? <span style={{ color: '#cbd5e1', fontSize: 11 }}>—</span>
                             : <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              {promoAplic.map(rule => (
-                                <span key={rule.id} style={{ fontSize: 10, padding: '2px 7px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 4, fontWeight: 600 }}>
-                                  {rule.eticheta || rule.name}
-                                </span>
-                              ))}
+                              {promoAplic.map(rule => {
+                                const orig = (db.promotionRules || []).find(r => r.id === rule.id)
+                                const a = orig?.actiune
+                                let detail = ''
+                                if (a?.tip === 'discount_procent_linie' || a?.tip === 'discount_procent_total') detail = `−${a.valoare}%`
+                                else if (a?.tip === 'discount_valoric') detail = `−${a.valoare} RON`
+                                else if (a?.tip === 'produs_gratuit') detail = `Cumperi ${a.cantitateMinima || '?'} → ${a.cantitateGratuita || 1} gratuit`
+                                return (
+                                  <div key={rule.id}>
+                                    <span style={{ fontSize: 10, padding: '2px 7px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 4, fontWeight: 600 }}>
+                                      {rule.eticheta || rule.name}{detail ? ` (${detail})` : ''}
+                                    </span>
+                                  </div>
+                                )
+                              })}
                             </div>
                           }
                         </td>

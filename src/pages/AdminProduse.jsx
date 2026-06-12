@@ -460,6 +460,50 @@ export default function AdminProduse() {
                     </>
                   )}
 
+                  {!isNew && (
+                    <>
+                      <div className="section-title" style={{ marginBottom: 10, marginTop: 20 }}>Fișă tehnică</div>
+                      <div className="form-group" style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 12, color: 'var(--text2)' }}>URL Fișă tehnică (PDF)</label>
+                        <input type="text" value={editForm.datasheet_url || ''} style={{ width: '100%' }}
+                          onChange={e => setEditForm(p => ({ ...p, datasheet_url: e.target.value }))}
+                          placeholder="https://..." />
+                      </div>
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <label style={{ fontSize: 12, color: 'var(--text2)' }}>Specificații tehnice</label>
+                          <button className="btn btn-ghost btn-sm" type="button" onClick={() => {
+                            const specs = editForm.specs_json ? (typeof editForm.specs_json === 'string' ? JSON.parse(editForm.specs_json) : editForm.specs_json) : []
+                            setEditForm(p => ({ ...p, specs_json: [...specs, { key: '', value: '' }] }))
+                          }}>+ Adaugă</button>
+                        </div>
+                        {(() => {
+                          const specs = editForm.specs_json ? (typeof editForm.specs_json === 'string' ? JSON.parse(editForm.specs_json) : editForm.specs_json) : []
+                          if (!specs.length) return <div style={{ fontSize: 12, color: 'var(--text3)' }}>Nicio specificație adăugată</div>
+                          return specs.map((s, i) => (
+                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 6, marginBottom: 6 }}>
+                              <input type="text" value={s.key} placeholder="Proprietate (ex: Gramaj)"
+                                onChange={e => {
+                                  const ns = [...specs]; ns[i] = { ...ns[i], key: e.target.value }
+                                  setEditForm(p => ({ ...p, specs_json: ns }))
+                                }} />
+                              <input type="text" value={s.value} placeholder="Valoare (ex: 2×800g)"
+                                onChange={e => {
+                                  const ns = [...specs]; ns[i] = { ...ns[i], value: e.target.value }
+                                  setEditForm(p => ({ ...p, specs_json: ns }))
+                                }} />
+                              <button className="btn btn-ghost btn-sm" type="button" style={{ color: 'var(--red)' }}
+                                onClick={() => {
+                                  const ns = specs.filter((_, j) => j !== i)
+                                  setEditForm(p => ({ ...p, specs_json: ns }))
+                                }}>✕</button>
+                            </div>
+                          ))
+                        })()}
+                      </div>
+                    </>
+                  )}
+
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-primary" onClick={handleSave}>{isNew ? '✨ Creează produs' : 'Salvează'}</button>
                     <button className="btn btn-secondary" onClick={() => setSelected(null)}>Anulează</button>

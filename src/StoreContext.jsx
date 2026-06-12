@@ -11,6 +11,7 @@ const EMPTY_DB = {
   clientPricing: [], favorites: [],
   agents: [], locations: [], exchange: null,
   commissionRules: [], commission_rules: [], uoms: [], unit_of_measure: [], recipes: [], surveys: [], survey_results: [],
+  banners: [],
 }
 
 export function StoreProvider({ children }) {
@@ -20,7 +21,7 @@ export function StoreProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [orders, customers, products, promotions, agents, locations, exchange, offers, uoms, surveys, commRules] =
+      const [orders, customers, products, promotions, agents, locations, exchange, offers, uoms, surveys, commRules, banners] =
         await Promise.allSettled([
           api.orders.list({ limit: 200 }),
           api.customers.list(),
@@ -33,6 +34,7 @@ export function StoreProvider({ children }) {
           api.uom.list(),
           api.surveys.list(),
           api.commissionRules.list(),
+          api.banners.active(),
         ])
       setDb(prev => ({
         ...prev,
@@ -58,6 +60,7 @@ export function StoreProvider({ children }) {
         unit_of_measure:  uoms.status       === 'fulfilled' ? (uoms.value || [])       : prev.unit_of_measure,
         surveys:          surveys.status    === 'fulfilled' ? (surveys.value || [])    : prev.surveys,
         commission_rules: commRules.status  === 'fulfilled' ? (commRules.value || [])  : prev.commission_rules,
+        banners:          banners.status    === 'fulfilled' ? (banners.value || [])    : prev.banners,
       }))
     } catch (err) {
       setError(err.message)

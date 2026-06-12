@@ -233,7 +233,7 @@ export default function AdminClienti() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Firmă</th><th>Agent</th><th>Val.</th><th>Transport</th><th>Comenzi</th><th>SS</th><th>Status</th><th></th></tr>
+              <tr><th>Firmă</th><th>Agent</th><th>Val.</th><th>Transport</th><th>Comenzi</th><th>SS</th><th>Status</th><th></th><th></th></tr>
             </thead>
             <tbody>
               {firms.map(firm => {
@@ -258,6 +258,7 @@ export default function AdminClienti() {
                         : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
                     </td>
                     <td>{statusBadge(firm.status)}</td>
+                    <td>{firm.newsletter_opt_in ? <span title="Newsletter activ" style={{ fontSize: 14 }}>✉</span> : null}</td>
                     <td>
                       {firm.status === 'in_aprobare' && (
                         <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
@@ -396,6 +397,13 @@ export default function AdminClienti() {
                         )
                       })}
                     </div>
+                  </div>
+                  <div style={{ marginTop: 12, marginBottom: 12 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={!!editForm.newsletter_opt_in}
+                        onChange={e => setEditForm(p => ({ ...p, newsletter_opt_in: e.target.checked }))} />
+                      Dorește să primească newslettere și oferte comerciale
+                    </label>
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <button className="btn btn-primary" onClick={handleSave}>Salvează</button>

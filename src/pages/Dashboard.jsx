@@ -6,16 +6,22 @@ import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
 import { lei, leiCuTva, cuTva, fmtDate, statusBadge } from '../utils'
 import SurveyPopup from '../components/SurveyPopup'
+import PromoBannerPopup from '../components/PromoBannerPopup'
 
 export default function Dashboard() {
   const { user } = useAuth()
   const { db } = useStore()
   const navigate = useNavigate()
   const [showSurvey, setShowSurvey] = useState(false)
+  const [showBanners, setShowBanners] = useState(false)
 
   useEffect(() => {
     if (user?.needsSurvey) setShowSurvey(true)
   }, [user])
+
+  useEffect(() => {
+    if (db.banners.length > 0 && user?.role !== 'admin') setShowBanners(true)
+  }, [db.banners, user])
 
   const clientId = user.customerId || user.firmId || null
   const myOrders = db.orders.filter(o => o.firmId === clientId || o.customer_id === clientId)
@@ -163,6 +169,7 @@ export default function Dashboard() {
         </div>
       </div>
       {showSurvey && <SurveyPopup onDone={() => setShowSurvey(false)} />}
+      {showBanners && <PromoBannerPopup bannere={db.banners} onClose={() => setShowBanners(false)} />}
     </Layout>
   )
 }

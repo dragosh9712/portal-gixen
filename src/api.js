@@ -144,6 +144,13 @@ const api = {
     create: data               => req('POST', '/api/uom', data),
     update: (id, data)         => req('PUT',  `/api/uom/${id}`, data),
   },
+  banners: {
+    active: ()                 => req('GET',  '/api/banners/active'),
+    list:   ()                 => req('GET',  '/api/banners'),
+    create: data               => req('POST', '/api/banners', data),
+    update: (id, data)         => req('PUT',  `/api/banners/${id}`, data),
+    remove: id                 => req('DELETE',`/api/banners/${id}`),
+  },
 }
 
 export default api

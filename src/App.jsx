@@ -23,8 +23,8 @@ import AdminRapoarte from './pages/AdminRapoarte'
 import AdminComisioane from './pages/AdminComisioane'
 import AdminLocatii from './pages/AdminLocatii'
 import AdminUoM from './pages/AdminUoM'
-import AdminRetetar from './pages/AdminRetetar'
 import AdminSurvey from './pages/AdminSurvey'
+import AdminBannere from './pages/AdminBannere'
 
 function RequireAuth({ children, role }) {
   const { user } = useAuth()
@@ -64,8 +64,8 @@ export default function App() {
         <Route path="/admin/comisioane" element={<RequireAuth role="admin"><AdminComisioane /></RequireAuth>} />
         <Route path="/admin/locatii" element={<RequireAuth role="admin"><AdminLocatii /></RequireAuth>} />
         <Route path="/admin/uom" element={<RequireAuth role="admin"><AdminUoM /></RequireAuth>} />
-        <Route path="/admin/retetar" element={<RequireAuth role="admin"><AdminRetetar /></RequireAuth>} />
         <Route path="/admin/survey" element={<RequireAuth role="admin"><AdminSurvey /></RequireAuth>} />
+        <Route path="/admin/bannere" element={<RequireAuth role="admin"><AdminBannere /></RequireAuth>} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

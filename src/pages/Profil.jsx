@@ -30,6 +30,7 @@ export default function Profil() {
     iban: firm?.iban || '', banca: firm?.banca || '', site_web: firm?.site_web || '',
     email_documente: firm?.email_documente || '', program_livrare: firm?.program_livrare || '',
     adresa_livrare: firm?.adresa_livrare || '', default_transport_type: firm?.default_transport_type || 'Van',
+    newsletter_opt_in: !!firm?.newsletter_opt_in,
   })
 
   function showToast(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 2500) }
@@ -159,7 +160,17 @@ export default function Profil() {
               <label>Email primire documente (facturi, avize)</label>
               <input type="email" className="w-full" value={form.email_documente} onChange={e => setForm(p => ({ ...p, email_documente: e.target.value }))} placeholder="facturi@firma.ro" />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ marginTop: 8 }}>Salvează</button>
+            <div className="divider" />
+            <div className="section-title" style={{ marginBottom: 12 }}>Preferințe comunicare</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="checkbox" id="nl-opt"
+                checked={!!form.newsletter_opt_in}
+                onChange={e => setForm(p => ({ ...p, newsletter_opt_in: e.target.checked }))} />
+              <label htmlFor="nl-opt" style={{ fontSize: 13, cursor: 'pointer' }}>
+                Doresc să primesc newslettere și oferte comerciale
+              </label>
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ marginTop: 16 }}>Salvează</button>
           </div>
         )}
       </form>

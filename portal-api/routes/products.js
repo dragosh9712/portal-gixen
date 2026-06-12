@@ -212,6 +212,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         fsinc_stoc            = @fsinc_stoc,
         fsinc_pret            = @fsinc_pret,
         image_url             = COALESCE(@image_url, image_url),
+        specs_json            = @specs_json,
+        datasheet_url         = @datasheet_url,
         is_active             = @active,
         updated_at            = SYSDATETIME()
       WHERE id = @id`, {
@@ -234,8 +236,10 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       fsinc:       p.fsinc      ? 1 : 0,
       fsinc_stoc:  p.fsinc_stoc ? 1 : 0,
       fsinc_pret:  p.fsinc_pret ? 1 : 0,
-      image_url:   p.image_url || p.imagine || null,
-      active:      p.activ !== false ? 1 : 0,
+      image_url:    p.image_url || p.imagine || null,
+      specs_json:   p.specs_json ? (typeof p.specs_json === 'string' ? p.specs_json : JSON.stringify(p.specs_json)) : null,
+      datasheet_url: p.datasheet_url || null,
+      active:       p.activ !== false ? 1 : 0,
     })
     res.json({ message: 'Produs actualizat' })
   } catch (err) {

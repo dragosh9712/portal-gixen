@@ -33,6 +33,7 @@ app.use('/api/anaf',        require('./routes/anaf'))
 app.use('/api/uom',         require('./routes/uom'))
 app.use('/api/surveys',     require('./routes/surveys'))
 app.use('/api/selectsoft',  require('./routes/selectsoft'))
+app.use('/api/banners',    require('./routes/banners'))
 
 // Health check — TREBUIE să fie înainte de catch-all
 app.get('/api/health', async (req, res) => {
@@ -103,8 +104,32 @@ function scheduleMidnightRefresh() {
   }, delay)
 }
 
+async function runMigrations() {
+  const { query } = require('./db')
+  try {
+    await query(`IF COL_LENGTH('customers','newsletter_opt_in') IS NULL ALTER TABLE customers ADD newsletter_opt_in BIT DEFAULT 0`)
+    await query(`IF COL_LENGTH('products','specs_json') IS NULL ALTER TABLE products ADD specs_json NVARCHAR(MAX)`)
+    await query(`IF COL_LENGTH('products','datasheet_url') IS NULL ALTER TABLE products ADD datasheet_url NVARCHAR(500)`)
+    await query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='promo_banners')
+      CREATE TABLE promo_banners (
+        id VARCHAR(64) PRIMARY KEY,
+        title NVARCHAR(255),
+        description NVARCHAR(2000),
+        image_url NVARCHAR(500),
+        active_from DATE,
+        active_until DATE,
+        show_to_groups NVARCHAR(255) DEFAULT 'all',
+        is_active BIT DEFAULT 1,
+        created_at DATETIME2 DEFAULT SYSDATETIME()
+      )`)
+    console.log('[migrations] OK')
+  } catch (e) { console.error('[migrations] Error:', e.message) }
+}
+
 app.listen(PORT, () => {
   console.log(`\n Gixen Portal API running on port ${PORT}`)
+  runMigrations()
   console.log(`   Health: http://localhost:${PORT}/api/health`)
   console.log(`   Env: ${process.env.NODE_ENV || 'development'}\n`)
   scheduleMidnightRefresh()

@@ -145,6 +145,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (c.brand_propriu !== undefined)       { fields.push('brand_propriu = @bp');            params.bp = c.brand_propriu || null }
     if (c.vizibilitate_produse !== undefined){ fields.push('vizibilitate_produse = @viz');    params.viz = c.vizibilitate_produse }
     if (c.paletizare_preferata !== undefined){ fields.push('paletizare_preferata = @palet');  params.palet = c.paletizare_preferata || null }
+    if (c.newsletter_opt_in !== undefined)   { fields.push('newsletter_opt_in = @nl');        params.nl = c.newsletter_opt_in ? 1 : 0 }
 
     if (fields.length > 0) {
       await query(`UPDATE customers SET ${fields.join(', ')} WHERE id = @id`, params)

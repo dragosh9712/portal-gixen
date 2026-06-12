@@ -32,10 +32,20 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
       const produse = data.produse || []
       if (produse.length === 0) break
 
+      // Grupează după cod — ia MAX(pret_van) per produs (dacă SS returnează variante)
+      const byCode = new Map()
       for (const p of produse) {
-        try {
-          if (p.fsinc) { skipped++; continue }  // exclus de la sincronizare în SS
+        if (p.fsinc) { skipped++; continue }
+        const cod = String(p.cod)
+        if (!byCode.has(cod)) { byCode.set(cod, p) }
+        else {
+          const prev = byCode.get(cod)
+          if (parseFloat(p.pret_van) > parseFloat(prev.pret_van)) byCode.set(cod, p)
+        }
+      }
 
+      for (const p of byCode.values()) {
+        try {
           const existing = await query(
             'SELECT id, fsinc_pret FROM products WHERE selectsoft_cod = @cod OR code = @cod',
             { cod: String(p.cod) }
@@ -47,7 +57,6 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
               `UPDATE products SET selectsoft_cod = @cod, updated_at = SYSDATETIME() WHERE id = @id`,
               { id: prod.id, cod: String(p.cod) }
             )
-            // Actualizează prețul de bază doar dacă produsul nu are sincronizarea de preț oprită
             const pret = parseFloat(p.pret_van)
             if (!prod.fsinc_pret && pret > 0) {
               await query(

@@ -24,6 +24,7 @@ function Icon({ name }) {
     uom:         <><path d="M3 6h14M3 10h10M3 14h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M15 12l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
     recipe:      <><path d="M9 3H5a1 1 0 00-1 1v14a1 1 0 001 1h10a1 1 0 001-1V9l-7-6z" stroke="currentColor" strokeWidth="1.5"/><path d="M9 3v6h7M7 12h6M7 15h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     survey:      <><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M7 8h6M7 11h6M7 14h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    megaphone:   <><path d="M3 8v4M3 10h12l3-5v10l-3-5H3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M7 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
   }
   return (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, opacity: 0.7 }}>
@@ -62,8 +63,8 @@ export default function Layout({ children, title, subtitle, actions }) {
     { to: '/admin/comisioane',     label: 'Agenți & Comisioane', icon: 'agent' },
     { to: '/admin/locatii',        label: 'Locații',            icon: 'location' },
     { to: '/admin/uom',            label: 'Unități de măsură',  icon: 'uom' },
-    { to: '/admin/retetar',        label: 'Rețetar',            icon: 'recipe' },
     { to: '/admin/survey',         label: 'Survey clienți',     icon: 'survey' },
+    { to: '/admin/bannere',        label: 'Bannere promo',      icon: 'megaphone' },
   ]
 
   const navItems = isAdmin ? adminNav : clientNav
