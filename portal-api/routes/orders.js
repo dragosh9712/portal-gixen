@@ -322,8 +322,10 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Discounturi pe linii (din promoEngine) — salvate ca JSON + total
+    // discountLinii.valoare e negativ (ex: -500), totalDiscount = sumă negativă → abs = reducere
     const discountLines = o.discount_lines || o.discountLinii || []
-    const totalDiscount = Math.round(discountLines.reduce((s, d) => s + (parseFloat(d.valoare) || 0), 0) * 100) / 100
+    const totalDiscountSigned = Math.round(discountLines.reduce((s, d) => s + (parseFloat(d.valoare) || 0), 0) * 100) / 100
+    const totalDiscount = Math.abs(totalDiscountSigned) // stocat pozitiv în DB (ca reducere)
     const netFinal = Math.max(0, Math.round((netTotal - totalDiscount) * 100) / 100)
     const tvaTotal   = Math.round(netFinal * TVA * 100) / 100
     const grossTotal = Math.round((netFinal + tvaTotal) * 100) / 100
@@ -455,7 +457,8 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     const discountLines = discount_lines || []
-    const totalDiscount = Math.round(discountLines.reduce((s, d) => s + (parseFloat(d.valoare) || 0), 0) * 100) / 100
+    const totalDiscountSigned = Math.round(discountLines.reduce((s, d) => s + (parseFloat(d.valoare) || 0), 0) * 100) / 100
+    const totalDiscount = Math.abs(totalDiscountSigned) // pozitiv în DB
     const netFinal   = Math.max(0, Math.round((netTotal - totalDiscount) * 100) / 100)
     const tvaTotal   = Math.round(netFinal * TVA * 100) / 100
     const grossTotal = Math.round((netFinal + tvaTotal) * 100) / 100
