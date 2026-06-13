@@ -102,13 +102,27 @@ export default function ComandaNoua() {
     return uom?.coeficient || 1
   }
 
-  // Unitatea de măsură atribuită clientului (paletizarea preferată)
-  const assignedUom = firma?.paletizare_preferata || null
+  // Normalizează o valoare UoM (cod/nume/paletizare) la o cheie comparabilă:
+  // "Bax"→"BAX", "Palet Duba"→"PALET_DUBA", "Palet (Duba)"→"PALET_DUBA"
+  function normalizeUomKey(s) {
+    return (s || '').toString().toUpperCase().replace(/[\s()]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+  }
+
+  // Unitatea de măsură atribuită clientului (paletizarea preferată), rezolvată
+  // la uom_code-ul real al produsului (match pe cod SAU nume, case/format-insensitive)
+  function resolveAssignedUom(product) {
+    if (!firma?.paletizare_preferata) return null
+    const key = normalizeUomKey(firma.paletizare_preferata)
+    const uoms = (product.product_uom || []).filter(u => u.is_orderable)
+    const match = uoms.find(u => normalizeUomKey(u.uom_code) === key || normalizeUomKey(u.uom_name) === key)
+    return match?.uom_code || null
+  }
 
   function getDefaultUom(product) {
     const uoms = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
     // Dacă firma are o unitate atribuită și produsul o suportă, o folosim forțat
-    if (assignedUom && uoms.some(u => u.uom_code === assignedUom)) return assignedUom
+    const assigned = resolveAssignedUom(product)
+    if (assigned) return assigned
     // Default BAX (nu rolă singulară)
     return uoms.find(u => u.uom_code === 'BAX')?.uom_code || uoms[0]?.uom_code || 'BAX'
   }
@@ -147,12 +161,6 @@ export default function ComandaNoua() {
 
   function removeFromCart(productId) {
     setCart(prev => { const next = { ...prev }; delete next[productId]; return next })
-  }
-
-  function getPretPerUom(product, uomCode) {
-    const pretRola = getPretPentruClient(product.id, clientId)
-    const coef = getUomCoeficient(product, uomCode)
-    return Math.round(pretRola * coef * 100) / 100
   }
 
   // Curs normalizat — backend trimite { rate }, dar acceptăm și applied_rate
@@ -231,14 +239,15 @@ export default function ComandaNoua() {
             {filteredProduse.map(product => {
               const inCart = cart[product.id]
               // Dacă firma are unitate atribuită și produsul o suportă → blocăm pe acea unitate
-              const lockedUom = assignedUom && (product.product_uom || []).some(u => u.is_orderable && u.uom_code === assignedUom) ? assignedUom : null
+              const lockedUom = resolveAssignedUom(product)
               const currentUom = lockedUom || inCart?.unitateSel || getDefaultUom(product)
               // Bug 13: UoM la nivel de bax/palet (nu rolă ca default)
               // Bug 14: filtrăm palet incompatibil cu transportul auto-detectat
               const relevantUoms = lockedUom
                 ? (product.product_uom || []).filter(u => u.uom_code === lockedUom)
                 : getRelevantUoms(product, autoTransportType)
-              const pretUom = getPretPerUom(product, currentUom)
+              // Prețul afișat în listă e MEREU per unitate primară (rolă/set), indiferent de paletizare
+              const pretRola = getPretPentruClient(product.id, clientId)
 
               return (
                 <div key={product.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -251,17 +260,8 @@ export default function ComandaNoua() {
                       {/* Bug 15: clientul NU vede stocul */}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--blue)', fontWeight: 600, marginTop: 1 }}>
-                      {fmtVal(pretUom)} / {(relevantUoms.find(u => u.uom_code === currentUom)?.uom_name || currentUom).toLowerCase()}
-                      {isEur && eurRate > 0 && <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>({lei(pretUom)})</span>}
-                    </div>
-                    {/* Mini UoM preview */}
-                    <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
-                      {relevantUoms.map(u => (
-                        <span key={u.uom_code} style={{ fontSize: 10, padding: '1px 5px', background: u.uom_code === currentUom ? 'var(--blue-bg)' : 'var(--bg3)', color: u.uom_code === currentUom ? 'var(--blue-text)' : 'var(--text3)', borderRadius: 4, cursor: 'pointer' }}
-                          onClick={() => setUom(product.id, u.uom_code)}>
-                          {u.uom_name}
-                        </span>
-                      ))}
+                      {fmtVal(pretRola)} / {primaryUom(product).label}
+                      {isEur && eurRate > 0 && <span style={{ color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>({lei(pretRola)})</span>}
                     </div>
                   </div>
 
