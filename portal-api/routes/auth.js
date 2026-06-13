@@ -9,8 +9,8 @@ const { logEmail } = require('./customers')
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body
-    if (!email || !password) return res.status(400).json({ error: 'Email și parolă necesare' })
+    const { email: userEmail, password } = req.body
+    if (!userEmail || !password) return res.status(400).json({ error: 'Email și parolă necesare' })
 
     const result = await query(`
       SELECT u.*,
@@ -24,7 +24,7 @@ router.post('/login', async (req, res) => {
       FROM users u
       LEFT JOIN customers c ON u.customer_id = c.id
       WHERE u.email = @email AND u.status != 'inactive'`,
-      { email }
+      { email: userEmail }
     )
     const user = result.recordset[0]
     if (!user) return res.status(401).json({ error: 'Email sau parolă incorecte' })
