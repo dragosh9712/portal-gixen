@@ -156,11 +156,12 @@ async function sendSurveyReminder(email, firmName) {
   await send(email, 'Reminder: completează profilul firmei — Gixen Portal', html)
 }
 
-async function sendOrderEdited(email, order, editedBy) {
+async function sendOrderEdited(email, order, editedBy, reason) {
   const html = wrap(`Comandă modificată — #${order.nr || order.id}`, `
     <p style="color:#444;line-height:1.7">Comanda dumneavoastră <strong>#${order.nr || order.id}</strong> a fost modificată de echipa Gixen.</p>
-    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;padding:14px;margin:16px 0;color:#92400e;font-size:13px">
-      Modificările au fost efectuate de: <strong>${editedBy || 'administrator'}</strong>
+    ${reason ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;padding:14px;margin:16px 0;color:#92400e;font-size:13px"><strong>Motiv modificare:</strong> ${reason}</div>` : ''}
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;padding:12px 14px;margin:12px 0;color:#075985;font-size:13px">
+      Modificat de: <strong>${editedBy || 'administrator'}</strong>
     </div>
     <p style="color:#444;line-height:1.7">Dacă aveți întrebări despre modificările efectuate, vă rugăm să contactați echipa noastră de vânzări.</p>`)
   await send(email, `Comandă modificată #${order.nr || order.id} — Gixen`, html).catch(() => {})

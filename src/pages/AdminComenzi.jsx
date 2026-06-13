@@ -104,6 +104,7 @@ export default function AdminComenzi() {
   function openEditModal(order) {
     setEditModal({
       orderId: order.id,
+      reason: '',
       lines: (order.lines || []).map(l => ({
         productId: l.productId,
         cantitate: l.cantitate,
@@ -118,7 +119,7 @@ export default function AdminComenzi() {
     if (!editModal) return
     setEditSaving(true)
     try {
-      const updated = await api.orders.editLines(editModal.orderId, { lines: editModal.lines })
+      const updated = await api.orders.editLines(editModal.orderId, { lines: editModal.lines, reason: editModal.reason })
       // refresh selected order with new data
       setSelected(prev => ({ ...prev, ...updated.order, lines: updated.order?.lines || prev.lines }))
       // refresh db.orders
@@ -440,6 +441,16 @@ export default function AdminComenzi() {
                 )}
               </tbody>
             </table>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Motiv modificare (trimis clientului pe email)</label>
+              <textarea
+                rows={2}
+                style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+                placeholder="ex: Prețul unui produs s-a actualizat / cantitate incorectă..."
+                value={editModal.reason}
+                onChange={e => setEditModal(prev => ({ ...prev, reason: e.target.value }))}
+              />
+            </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setEditModal(null)} disabled={editSaving}>Anulează</button>
               <button className="btn btn-primary" onClick={handleSaveEdit} disabled={editSaving || editModal.lines.length === 0}>

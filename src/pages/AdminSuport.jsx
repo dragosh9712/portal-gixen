@@ -118,7 +118,7 @@ export default function AdminSuport() {
                       {new Date(t.created_at).toLocaleDateString('ro-RO')}
                     </td>
                     <td style={{ padding: '10px 14px' }}>
-                      <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => openTicket(t)}>
+                      <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => openTicket(t)}>
                         Deschide
                       </button>
                     </td>
@@ -182,10 +182,10 @@ export default function AdminSuport() {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-primary" onClick={handleSave} disabled={saving}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? 'Se salvează…' : 'Salvează'}
               </button>
-              <button className="btn-secondary" onClick={() => setSelected(null)}>Închide</button>
+              <button className="btn btn-secondary" onClick={() => setSelected(null)}>Închide</button>
             </div>
           </div>
         </div>

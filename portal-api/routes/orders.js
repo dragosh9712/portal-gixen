@@ -405,7 +405,7 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
     const editableStatuses = ['plasata', 'asteptare_plata', 'in_aprobare']
     if (!editableStatuses.includes(ord.status)) return res.status(409).json({ error: `Comanda cu status '${ord.status}' nu poate fi editată.` })
 
-    const { lines, discount_lines, observations } = req.body
+    const { lines, discount_lines, observations, reason } = req.body
     if (!lines?.length) return res.status(400).json({ error: 'Liniile nu pot fi goale' })
 
     // Șterge liniile vechi și reinsertează
@@ -453,7 +453,7 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
        WHERE o.id = @id`, { id: req.params.id })
     const row = orderResult.recordset[0]
     if (row?.email) {
-      emailSvc.sendOrderEdited(row.email, { nr: row.order_number, id: req.params.id }, req.user.name || req.user.email).catch(() => {})
+      emailSvc.sendOrderEdited(row.email, { nr: row.order_number, id: req.params.id }, req.user.name || req.user.email, reason).catch(() => {})
     }
 
     res.json({ message: 'Comanda a fost actualizată', net_total: netFinal, tva_total: tvaTotal, gross_total: grossTotal })

@@ -135,7 +135,7 @@ function ClientiAsociati({ productId, customers }) {
           <option value="">— selectează client —</option>
           {available.map(c => <option key={c.id} value={c.id}>{c.name || c.company_name}</option>)}
         </select>
-        <button className="btn-primary" onClick={handleAdd} disabled={adding || !selCid}>Adaugă</button>
+        <button className="btn btn-primary" onClick={handleAdd} disabled={adding || !selCid}>Adaugă</button>
       </div>
       {loading ? <div style={{ color: 'var(--text3)', fontSize: 13 }}>Se încarcă…</div> : list.length === 0 ? (
         <div style={{ color: 'var(--text3)', fontSize: 13, padding: '12px 0' }}>Niciun client asociat — produsul este public.</div>
@@ -328,7 +328,7 @@ export default function AdminProduse() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Produs</th><th>Brand</th><th>Tip</th><th>Preț bază</th><th>R/bax</th><th>Bax/Duba</th><th>Bax/TIR</th><th>Cod SS</th><th>Imagine</th><th></th></tr>
+              <tr><th>Produs</th><th>Proprietar</th><th>Brand</th><th>Tip</th><th>Preț bază</th><th>R/bax</th><th>Bax/Duba</th><th>Bax/TIR</th><th>Cod SS</th><th>Imagine</th><th></th></tr>
             </thead>
             <tbody>
               {products.slice(0, 100).map(p => {
@@ -348,6 +348,9 @@ export default function AdminProduse() {
                           <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.cod}</div>
                         </div>
                       </div>
+                    </td>
+                    <td style={{ fontSize: 12, color: p.private_brand_firm_id ? 'var(--blue-text)' : 'var(--text3)' }}>
+                      {p.private_brand_firm_id ? ownerName(p.private_brand_firm_id) : 'Gixen'}
                     </td>
                     <td style={{ fontSize: 12 }}>{p.brand || '—'}</td>
                     <td><span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 4, fontFamily: 'monospace' }}>{p.product_type || '—'}</span></td>
