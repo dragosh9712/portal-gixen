@@ -1,6 +1,6 @@
 // eslint-disable-next-line react-refresh/only-export-components
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import api from './api'
+import api, { getToken } from './api'
 import { getPretPentruClient as engineGetPret } from './promoEngine.js'
 
 const StoreContext = createContext(null)
@@ -16,7 +16,7 @@ const EMPTY_DB = {
 
 export function StoreProvider({ children }) {
   const [db, setDb] = useState(EMPTY_DB)
-  const [loading, setLoading] = useState(() => !!localStorage.getItem('gixen_token'))
+  const [loading, setLoading] = useState(() => !!getToken())
   const [error, setError] = useState(null)
 
   const refreshAll = useCallback(async () => {
@@ -102,7 +102,7 @@ export function StoreProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    if (localStorage.getItem('gixen_token')) refreshAll()
+    if (getToken()) refreshAll()
   }, [refreshAll])
 
   // ── Orders ──
