@@ -152,6 +152,10 @@ async function runMigrations() {
         is_active BIT DEFAULT 1,
         created_at DATETIME2 DEFAULT SYSDATETIME()
       )`)
+    // 2FA columns
+    await query(`IF COL_LENGTH('users','two_fa_enabled') IS NULL ALTER TABLE users ADD two_fa_enabled BIT DEFAULT 1`)
+    await query(`IF COL_LENGTH('users','otp_code')       IS NULL ALTER TABLE users ADD otp_code       NVARCHAR(64)`)
+    await query(`IF COL_LENGTH('users','otp_expires_at') IS NULL ALTER TABLE users ADD otp_expires_at DATETIME2`)
     console.log('[migrations] OK')
   } catch (e) { console.error('[migrations] Error:', e.message) }
 }

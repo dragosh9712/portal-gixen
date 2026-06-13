@@ -167,6 +167,18 @@ async function sendOrderEdited(email, order, editedBy, reason) {
   await send(email, `Comandă modificată #${order.nr || order.id} — Gixen`, html).catch(() => {})
 }
 
+async function sendLoginOtp(email, code) {
+  const html = wrap('Cod de autentificare — Gixen Portal', `
+    <p style="color:#444;line-height:1.7">Cineva (probabil dumneavoastră) încearcă să se autentifice în portalul Gixen.</p>
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:24px;margin:20px 0;text-align:center">
+      <div style="font-size:12px;color:#0369a1;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Codul dumneavoastră de verificare</div>
+      <div style="font-size:42px;font-weight:800;color:#0c4a6e;letter-spacing:12px;font-family:monospace">${code}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:8px">Valabil 10 minute</div>
+    </div>
+    <p style="color:#888;font-size:12px;line-height:1.6">Dacă nu ați solicitat acest cod, ignorați acest email — contul dumneavoastră este în siguranță.<br/>Nu partajați acest cod cu nimeni, inclusiv cu echipa Gixen.</p>`)
+  await send(email, 'Cod de autentificare — Gixen Portal', html)
+}
+
 module.exports = {
   sendOnboardingPending,
   sendOnboardingApproved,
@@ -177,5 +189,6 @@ module.exports = {
   sendCreditLimitWarning,
   sendPasswordReset,
   sendSurveyReminder,
+  sendLoginOtp,
   ORDER_STATUS_LABELS,
 }

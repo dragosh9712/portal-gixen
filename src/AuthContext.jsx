@@ -4,7 +4,7 @@ import api, { setToken } from './api'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+  const [user, setUserState] = useState(() => {
     const saved = localStorage.getItem('gixen_user') || sessionStorage.getItem('gixen_user')
     return saved ? JSON.parse(saved) : null
   })
@@ -12,9 +12,14 @@ export function AuthProvider({ children }) {
   async function login(email, password, remember = true) {
     try {
       const data = await api.auth.login(email, password)
+      if (data.requiresOtp) {
+        if (remember) localStorage.setItem('gixen_remember_email', email)
+        else localStorage.removeItem('gixen_remember_email')
+        return { requiresOtp: true }
+      }
       setToken(data.token, remember)
       const userObj = { ...data.user }
-      setUser(userObj)
+      setUserState(userObj)
       localStorage.removeItem('gixen_user')
       sessionStorage.removeItem('gixen_user')
       ;(remember ? localStorage : sessionStorage).setItem('gixen_user', JSON.stringify(userObj))
@@ -28,13 +33,20 @@ export function AuthProvider({ children }) {
 
   function logout() {
     setToken(null)
-    setUser(null)
+    setUserState(null)
     localStorage.removeItem('gixen_user')
     sessionStorage.removeItem('gixen_user')
   }
 
+  function setUser(userObj, remember = true) {
+    setUserState(userObj)
+    localStorage.removeItem('gixen_user')
+    sessionStorage.removeItem('gixen_user')
+    if (userObj) (remember ? localStorage : sessionStorage).setItem('gixen_user', JSON.stringify(userObj))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   )

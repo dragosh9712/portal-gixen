@@ -39,6 +39,20 @@ router.post('/login', async (req, res) => {
 
     const needsSurvey = user.role === 'client' && !user.first_login_done && !user.survey_completed
 
+    // 2FA: trimite OTP dacă activat global (env) ȘI per user
+    const twoFaGlobal = process.env.TWO_FA_ENABLED !== 'false'
+    const twoFaUser   = user.two_fa_enabled !== 0 && user.two_fa_enabled !== false
+    if (twoFaGlobal && twoFaUser) {
+      const code = String(Math.floor(100000 + Math.random() * 900000))
+      const hash = crypto.createHash('sha256').update(code).digest('hex')
+      await query(
+        `UPDATE users SET otp_code=@h, otp_expires_at=DATEADD(MINUTE,10,GETUTCDATE()) WHERE id=@id`,
+        { h: hash, id: user.id }
+      )
+      email.sendLoginOtp(user.email, code).catch(err => console.error('OTP email error:', err.message))
+      return res.json({ requiresOtp: true })
+    }
+
     // Marchează primul login
     if (!user.first_login_done) {
       await query('UPDATE users SET first_login_done = 1 WHERE id = @id', { id: user.id })
@@ -227,6 +241,80 @@ router.post('/reset-password', async (req, res) => {
     await query('UPDATE password_reset_tokens SET used=1 WHERE token=@token', { token })
 
     res.json({ message: 'Parola a fost resetată cu succes.' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/auth/verify-otp — step 2 al autentificării 2FA
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email: userEmail, code } = req.body
+    if (!userEmail || !code) return res.status(400).json({ error: 'Email și cod obligatorii' })
+
+    const result = await query(`
+      SELECT u.*,
+        c.name AS firm_name, c.agent_id, c.currency, c.status AS firm_status,
+        c.survey_completed, c.default_transport_type, c.customer_group
+      FROM users u
+      LEFT JOIN customers c ON u.customer_id = c.id
+      WHERE u.email = @email AND u.status != 'inactive'`,
+      { email: userEmail }
+    )
+    const user = result.recordset[0]
+    if (!user || !user.otp_code || !user.otp_expires_at) {
+      return res.status(401).json({ error: 'Cod invalid sau expirat' })
+    }
+
+    // Verifică expiry
+    if (new Date(user.otp_expires_at) < new Date()) {
+      return res.status(401).json({ error: 'Codul a expirat. Încearcă din nou.' })
+    }
+
+    // Verifică hash
+    const inputHash = crypto.createHash('sha256').update(code).digest('hex')
+    if (inputHash !== user.otp_code) {
+      return res.status(401).json({ error: 'Cod incorect' })
+    }
+
+    // Șterge OTP + marchează primul login
+    await query(
+      `UPDATE users SET otp_code=NULL, otp_expires_at=NULL${!user.first_login_done ? ', first_login_done=1' : ''} WHERE id=@id`,
+      { id: user.id }
+    )
+
+    const needsSurvey = user.role === 'client' && !user.first_login_done && !user.survey_completed
+    const token = generateToken(user)
+    res.json({
+      token,
+      user: {
+        id:            user.id,
+        email:         user.email,
+        name:          user.name,
+        role:          user.role,
+        customerId:    user.customer_id,
+        firmId:        user.customer_id,
+        firmName:      user.firm_name,
+        agentId:       user.agent_id,
+        currency:      user.currency,
+        delegateType:  user.delegate_type,
+        canPlaceOrders:!!user.can_place_orders,
+        needsSurvey,
+      }
+    })
+  } catch (err) {
+    console.error('verify-otp error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PUT /api/auth/toggle-2fa — admin: activare/dezactivare 2FA per user
+router.put('/toggle-2fa', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, enabled } = req.body
+    if (!userId) return res.status(400).json({ error: 'userId obligatoriu' })
+    await query('UPDATE users SET two_fa_enabled=@v WHERE id=@id', { v: enabled ? 1 : 0, id: userId })
+    res.json({ message: `2FA ${enabled ? 'activat' : 'dezactivat'} pentru user ${userId}` })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

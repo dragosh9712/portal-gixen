@@ -13,7 +13,7 @@ export function setToken(t, remember = true) {
 export function getToken() { return _token }
 
 // Rute publice de auth — un 401 aici NU trebuie să redirecționeze către login
-const PUBLIC_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password']
+const PUBLIC_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/auth/verify-otp']
 
 async function req(method, path, body = null, isFormData = false) {
   const headers = {}
@@ -46,6 +46,8 @@ const api = {
     register: data              => req('POST', '/api/auth/register', data),
     me:       ()                => req('GET',  '/api/auth/me'),
     changePassword: (currentPassword, newPassword) => req('PUT', '/api/auth/change-password', { currentPassword, newPassword }),
+    verifyOtp:      (email, code)                   => req('POST', '/api/auth/verify-otp', { email, code }),
+    toggleTwoFa:    (userId, enabled)               => req('PUT',  '/api/auth/toggle-2fa', { userId, enabled }),
     resetPassword: (userId, newPassword) => req('PUT', `/api/auth/reset-password/${userId}`, { newPassword }),
     forgotPassword:     email              => req('POST', '/api/auth/forgot-password', { email }),
     resetPasswordToken: (token, newPassword) => req('POST', '/api/auth/reset-password', { token, newPassword }),
