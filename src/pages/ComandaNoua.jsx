@@ -223,7 +223,7 @@ export default function ComandaNoua() {
         </div>
       ))}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, alignItems: 'start' }}>
+      <div className="order-grid" style={{ alignItems: 'start' }}>
         {/* Produse */}
         <div>
           <div className="card" style={{ marginBottom: 12, padding: '12px 16px' }}>

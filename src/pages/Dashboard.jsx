@@ -108,7 +108,7 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 16, marginBottom: 24 }}>
+      <div className="dash-grid" style={{ marginBottom: 24 }}>
         <div className="card">
           <div className="section-title" style={{ marginBottom: 12 }}>Valoare comenzi / lună</div>
           <ResponsiveContainer width="100%" height={140}>

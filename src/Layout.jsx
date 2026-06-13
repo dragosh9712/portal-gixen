@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { useStore } from './StoreContext'
@@ -39,6 +40,8 @@ export default function Layout({ children, title, subtitle, actions }) {
   const { totalPending, pendingApprovals, pendingOrders } = useStore()
   const navigate = useNavigate()
   const isAdmin = user?.role === 'admin'
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
   const clientNav = [
     { to: '/dashboard',       label: 'Dashboard',       icon: 'dashboard' },
@@ -74,7 +77,10 @@ export default function Layout({ children, title, subtitle, actions }) {
   const initials = getInitials(user?.name)
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`}>
+      {/* Overlay pentru mobile — click închide sidebar */}
+      <div className="sidebar-overlay" onClick={closeSidebar} />
+
       <aside className="sidebar">
         <div className="sidebar-logo">
           <GixenLogo color="white" height={42} />
@@ -86,7 +92,8 @@ export default function Layout({ children, title, subtitle, actions }) {
             if (item.divider) return <div key={i} style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '6px 16px' }} />
             return (
               <NavLink key={item.to} to={item.to}
-                className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}>
+                className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+                onClick={closeSidebar}>
                 <Icon name={item.icon} />
                 {item.label}
                 {item.badge && <span className="nav-badge">{item.badge}</span>}
@@ -119,9 +126,16 @@ export default function Layout({ children, title, subtitle, actions }) {
 
       <div className="main-content">
         <div className="topbar">
-          <div>
-            <div className="topbar-title">{title}</div>
-            {subtitle && <div className="topbar-sub">{subtitle}</div>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button className="hamburger-btn" onClick={() => setSidebarOpen(o => !o)} aria-label="Meniu">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M2 5h16M2 10h16M2 15h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+            <div>
+              <div className="topbar-title">{title}</div>
+              {subtitle && <div className="topbar-sub">{subtitle}</div>}
+            </div>
           </div>
           <div className="flex gap-8" style={{ alignItems: 'center' }}>
             <GlobalSearch />
