@@ -35,20 +35,36 @@ export function fmtDateTime(dateStr) {
     ' ' + d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })
 }
 
+export const ORDER_STATUS_LABELS = {
+  plasata:         'Plasată',
+  asteptare_plata: 'Așteptare plată',
+  in_aprobare:     'În aprobare',
+  aprobata:        'Aprobată',
+  in_procesare:    'În procesare',
+  aviz_generat:    'Aviz emis',
+  in_livrare:      'În livrare',
+  livrata:         'Livrată',
+  anulata:         'Anulată',
+  respinsa:        'Respinsă',
+}
+
 const STATUS_MAP = {
+  plasata:         { label: 'Plasată',         cls: 'badge-gray' },
   asteptare_plata: { label: 'Așteptare plată', cls: 'badge-orange' },
-  in_aprobare:  { label: 'În aprobare',  cls: 'badge-yellow' },
-  aprobat:      { label: 'Aprobat',      cls: 'badge-blue' },
-  in_procesare: { label: 'În procesare', cls: 'badge-blue' },
-  livrat:       { label: 'Livrat',       cls: 'badge-green' },
-  anulat:       { label: 'Anulat',       cls: 'badge-red' },
-  activ:        { label: 'Activ',        cls: 'badge-green' },
-  inactiv:      { label: 'Inactiv',      cls: 'badge-gray' },
-  respinsa:     { label: 'Respinsă',     cls: 'badge-red' },
-  draft:        { label: 'Draft',        cls: 'badge-gray' },
-  trimisa:      { label: 'Trimisă',      cls: 'badge-blue' },
-  acceptata:    { label: 'Acceptată',    cls: 'badge-green' },
-  expirata:     { label: 'Expirată',     cls: 'badge-red' },
+  in_aprobare:     { label: 'În aprobare',     cls: 'badge-yellow' },
+  aprobata:        { label: 'Aprobată',        cls: 'badge-blue' },
+  in_procesare:    { label: 'În procesare',    cls: 'badge-blue' },
+  aviz_generat:    { label: 'Aviz emis',       cls: 'badge-blue' },
+  in_livrare:      { label: 'În livrare',      cls: 'badge-orange' },
+  livrata:         { label: 'Livrată',         cls: 'badge-green' },
+  anulata:         { label: 'Anulată',         cls: 'badge-red' },
+  respinsa:        { label: 'Respinsă',        cls: 'badge-red' },
+  activ:           { label: 'Activ',           cls: 'badge-green' },
+  inactiv:         { label: 'Inactiv',         cls: 'badge-gray' },
+  draft:           { label: 'Draft',           cls: 'badge-gray' },
+  trimisa:         { label: 'Trimisă',         cls: 'badge-blue' },
+  acceptata:       { label: 'Acceptată',       cls: 'badge-green' },
+  expirata:        { label: 'Expirată',        cls: 'badge-red' },
 }
 
 export function statusBadge(status) {

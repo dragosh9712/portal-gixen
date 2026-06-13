@@ -90,17 +90,27 @@ async function sendOrderPlaced(email, order) {
   await send(email, `Comandă confirmată #${order.nr || order.id} — Gixen`, html).catch(() => {})
 }
 
+const ORDER_STATUS_LABELS = {
+  plasata:         'Plasată',
+  asteptare_plata: 'Așteptare plată',
+  in_aprobare:     'În aprobare',
+  aprobata:        'Aprobată',
+  in_procesare:    'În procesare',
+  aviz_generat:    'Aviz emis',
+  in_livrare:      'În livrare',
+  livrata:         'Livrată',
+  anulata:         'Anulată',
+  respinsa:        'Respinsă',
+}
+const ORDER_STATUS_COLORS = {
+  plasata: '#6b7280', asteptare_plata: '#d97706', in_aprobare: '#ca8a04',
+  aprobata: '#1e40af', in_procesare: '#1e40af', aviz_generat: '#1e40af',
+  in_livrare: '#d97706', livrata: '#16a34a', anulata: '#dc2626', respinsa: '#dc2626',
+}
+
 async function sendOrderStatusChanged(email, order, newStatus) {
-  const statusLabels = {
-    'in_procesare': 'În procesare', 'confirmata': 'Confirmată', 'in_livrare': 'În livrare',
-    'livrata': 'Livrată', 'anulata': 'Anulată',
-  }
-  const statusColors = {
-    'confirmata': '#16a34a', 'livrata': '#16a34a',
-    'in_livrare': '#d97706', 'anulata': '#dc2626', 'in_procesare': '#1e40af',
-  }
-  const label = statusLabels[newStatus] || newStatus
-  const color = statusColors[newStatus] || '#555'
+  const label = ORDER_STATUS_LABELS[newStatus] || newStatus
+  const color = ORDER_STATUS_COLORS[newStatus] || '#555'
   const html = wrap(`Status comandă actualizat — #${order.nr || order.id}`, `
     <p style="color:#444;line-height:1.7">Statusul comenzii <strong>#${order.nr || order.id}</strong> a fost actualizat.</p>
     <div style="text-align:center;margin:20px 0;padding:16px;background:#f8fafc;border-radius:8px">
@@ -146,13 +156,25 @@ async function sendSurveyReminder(email, firmName) {
   await send(email, 'Reminder: completează profilul firmei — Gixen Portal', html)
 }
 
+async function sendOrderEdited(email, order, editedBy) {
+  const html = wrap(`Comandă modificată — #${order.nr || order.id}`, `
+    <p style="color:#444;line-height:1.7">Comanda dumneavoastră <strong>#${order.nr || order.id}</strong> a fost modificată de echipa Gixen.</p>
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;padding:14px;margin:16px 0;color:#92400e;font-size:13px">
+      Modificările au fost efectuate de: <strong>${editedBy || 'administrator'}</strong>
+    </div>
+    <p style="color:#444;line-height:1.7">Dacă aveți întrebări despre modificările efectuate, vă rugăm să contactați echipa noastră de vânzări.</p>`)
+  await send(email, `Comandă modificată #${order.nr || order.id} — Gixen`, html).catch(() => {})
+}
+
 module.exports = {
   sendOnboardingPending,
   sendOnboardingApproved,
   sendOnboardingRejected,
   sendOrderPlaced,
   sendOrderStatusChanged,
+  sendOrderEdited,
   sendCreditLimitWarning,
   sendPasswordReset,
   sendSurveyReminder,
+  ORDER_STATUS_LABELS,
 }

@@ -32,10 +32,25 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
       const produse = data.produse || []
       if (produse.length === 0) break
 
+      // Filtre configurabile via env — exclude materii prime, deșeuri etc.
+      const excludePrefixes = (process.env.SELECTSOFT_EXCLUDE_NAME_PREFIXES || 'MP ').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      const excludeKeywords = (process.env.SELECTSOFT_EXCLUDE_KEYWORDS || 'deseu,deșeu,deseuri,deșeuri,rebut').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      const includeGroups   = (process.env.SELECTSOFT_INCLUDE_GROUPS || '').split(',').map(s => s.trim()).filter(Boolean)
+
+      function isExcluded(p) {
+        const name = (p.denumire || '').toLowerCase()
+        if (excludePrefixes.some(pr => name.startsWith(pr))) return true
+        if (excludeKeywords.some(kw => name.includes(kw))) return true
+        if (includeGroups.length > 0 && !includeGroups.includes(p.grupa)) return true
+        return false
+      }
+
       // Grupează după cod — ia MAX(pret_van) per produs (dacă SS returnează variante)
       const byCode = new Map()
+      let skippedFilter = 0
       for (const p of produse) {
         if (p.fsinc) { skipped++; continue }
+        if (isExcluded(p)) { skippedFilter++; skipped++; continue }
         const cod = String(p.cod)
         if (!byCode.has(cod)) { byCode.set(cod, p) }
         else {
@@ -93,8 +108,8 @@ router.post('/sync-products', authenticateToken, requireAdmin, async (req, res) 
 
     res.json({
       ok: true,
-      message: `Sincronizare produse: ${updated} actualizate, ${created} create (inactive, de revizuit), ${skipped} excluse (fsinc)`,
-      updated, created, skipped,
+      message: `Sincronizare produse: ${updated} actualizate, ${created} create (inactive, de revizuit), ${skipped} excluse (${skippedFilter} filtrate MP/deșeuri)`,
+      updated, created, skipped, skippedFilter,
       updatedList, createdList,
       errors: errors.slice(0, 20),
     })
@@ -363,6 +378,31 @@ router.post('/import-history', authenticateToken, requireAdmin, async (req, res)
     })
   } catch (err) {
     console.error('[SS import] Eroare:', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// GET /api/selectsoft/product-groups — listează grupele/subgrupele distincte din SS (calibrare filtre)
+router.get('/product-groups', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const groups = new Map()
+    let offset = 0
+    while (true) {
+      const data = await ss.getProduse({ limit: 200, offset })
+      const produse = data.produse || []
+      if (produse.length === 0) break
+      for (const p of produse) {
+        const key = `${p.grupa || '(fără grupă)'}|||${p.subgrupa || ''}`
+        groups.set(key, (groups.get(key) || 0) + 1)
+      }
+      if (produse.length < 200) break
+      offset += 200
+    }
+    const result = [...groups.entries()]
+      .map(([k, count]) => { const [grupa, subgrupa] = k.split('|||'); return { grupa, subgrupa, count } })
+      .sort((a, b) => b.count - a.count)
+    res.json({ ok: true, total: result.reduce((s, r) => s + r.count, 0), groups: result })
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }
 })

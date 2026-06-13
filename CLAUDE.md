@@ -279,6 +279,13 @@ SELECTSOFT_PUSH_ORDERS=false         # true = trimite automat comenzile în SS
 - [ ] **Mărci permise** — dacă nu se mai folosesc checkboxurile pe client, de ascuns din AdminClienti
 - [ ] **Favorite cu tabelă DB** — momentan în localStorage; dacă se cere persistență cross-device, adăugăm tabelă `favorites`
 
+### Implementat recent (batch WhatsApp 13.06)
+- [x] **STATUS_MAP fix**: Chei reale din DB (`plasata, aprobata, livrata, anulata` — plural). `ORDER_STATUS_LABELS` exportat din `utils.jsx` și `emailService.js` pentru refolosire. Emailul afișează label RO corect.
+- [x] **UoM primar per categorie**: `primaryUom(product)` în `promoEngine.js` — dacă `product.categorie` conține 'igien'/'hig' → label='set', altfel 'rolă'. Aplicat în Produse.jsx, ComandaNoua.jsx, AdminProduse.jsx.
+- [x] **Filtru SS sync configurabil**: excludePrefixes (`MP ` default), excludeKeywords (`deseu,deșeu` default), includeGroups (gol=toate). Endpoint diagnostic `GET /api/selectsoft/product-groups` listează grupurile distincte. Env: `SELECTSOFT_EXCLUDE_NAME_PREFIXES`, `SELECTSOFT_EXCLUDE_KEYWORDS`, `SELECTSOFT_INCLUDE_GROUPS`.
+- [x] **Vizibilitate many-to-many** via `product_client_access` (reactivată): produsele cu asocieri devin private; produsele publice Gixen = fără nicio asociere is_active. CRUD: `GET/POST/DELETE /api/products/:id/clients`. UI în AdminProduse → tab „Clienți asociați".
+- [x] **Flux comenzi actualizat**: push SS **NU** mai are loc la creare — se face la tranziția spre `aprobata` (guard `synced_at IS NULL`). Comandă editabilă cât timp `status ∈ {plasata, asteptare_plata, in_aprobare}` și `synced_at IS NULL`. Endpoint: `PUT /api/orders/:id/lines`. Email `sendOrderEdited` la fiecare editare. Badge „Trimisă în SS" în AdminComenzi când `synced_at` e setat.
+
 ### Confirmat OK
 - [x] Proformare plată: folosim `suma_incasari >= suma_cu_tva` din `/restdoc` (nu câmpul `restant`)
 - [x] Logo email: base64 SVG embedded în emailService.js (funcționează fără URL extern)

@@ -43,17 +43,21 @@ router.get('/', authenticateToken, async (req, res) => {
         const viz = (client?.vizibilitate_produse || 'gixen_si_proprii').trim()
         params.clientFirmId = req.user.customerId
         if (viz === 'doar_proprii') {
-          // Doar produsele proprii ale firmei
-          where += ' AND p.private_brand_firm_id = @clientFirmId'
-        } else {
-          // gixen_si_proprii: produse publice fără proprietar (ale Gixen) + propriile produse
-          // Produsele private/publice ale ALTOR firme nu sunt vizibile
+          // Doar produsele proprii ale firmei (many-to-many sau single-owner)
           where += ` AND (
             p.private_brand_firm_id = @clientFirmId
-            OR (
+            OR p.id IN (SELECT product_id FROM product_client_access WHERE customer_id = @clientFirmId AND is_active = 1)
+          )`
+        } else {
+          // gixen_si_proprii: produse publice Gixen (fără proprietar) + produse asociate clientului
+          where += ` AND (
+            (
               (p.vizibilitate IS NULL OR p.vizibilitate LIKE 'public%')
               AND (p.private_brand_firm_id IS NULL OR p.private_brand_firm_id = '')
+              AND p.id NOT IN (SELECT product_id FROM product_client_access WHERE is_active = 1)
             )
+            OR p.private_brand_firm_id = @clientFirmId
+            OR p.id IN (SELECT product_id FROM product_client_access WHERE customer_id = @clientFirmId AND is_active = 1)
           )`
         }
       } catch (e) {
@@ -251,6 +255,56 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 // POST /api/products/:id/selectsoft
 router.post('/:id/selectsoft', authenticateToken, requireAdmin, async (req, res) => {
   res.json({ success: false, message: 'Disponibil după integrarea API SelectSoft' })
+})
+
+// ── Asocieri produse ↔ clienți (product_client_access) ──
+
+// GET /api/products/:id/clients — listează clienții asociați
+router.get('/:id/clients', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT pca.id, pca.customer_id, pca.is_active, c.name AS customer_name
+      FROM product_client_access pca
+      JOIN customers c ON c.id = pca.customer_id
+      WHERE pca.product_id = @pid`, { pid: req.params.id })
+    res.json(result.recordset)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/products/:id/clients — adaugă un client asociat
+router.post('/:id/clients', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { customer_id } = req.body
+    if (!customer_id) return res.status(400).json({ error: 'customer_id obligatoriu' })
+    const exists = await query(
+      'SELECT id FROM product_client_access WHERE product_id=@pid AND customer_id=@cid',
+      { pid: req.params.id, cid: customer_id })
+    if (exists.recordset[0]) {
+      await query('UPDATE product_client_access SET is_active=1 WHERE product_id=@pid AND customer_id=@cid',
+        { pid: req.params.id, cid: customer_id })
+    } else {
+      await query(`INSERT INTO product_client_access (customer_id, product_id, access_type, is_active)
+        VALUES (@cid, @pid, 'full', 1)`, { pid: req.params.id, cid: customer_id })
+    }
+    // Marchează produsul ca privat
+    await query(`UPDATE products SET vizibilitate='privat' WHERE id=@pid`, { pid: req.params.id })
+    res.status(201).json({ message: 'Client asociat' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// DELETE /api/products/:id/clients/:customerId — elimină asocierea
+router.delete('/:id/clients/:customerId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await query('UPDATE product_client_access SET is_active=0 WHERE product_id=@pid AND customer_id=@cid',
+      { pid: req.params.id, cid: req.params.customerId })
+    // Dacă nu mai are clienți asociați, marchează produsul ca public
+    const remaining = await query(
+      'SELECT id FROM product_client_access WHERE product_id=@pid AND is_active=1', { pid: req.params.id })
+    if (remaining.recordset.length === 0) {
+      await query(`UPDATE products SET vizibilitate='public', private_brand_firm_id=NULL WHERE id=@pid`, { pid: req.params.id })
+    }
+    res.json({ message: 'Asociere eliminată' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 module.exports = router

@@ -16,6 +16,14 @@ function normalizeDate(d) {
   return s
 }
 
+// ── Unitate primară per produs (bazată pe categorie stocată pe produs) ──
+// Returnează { code: 'ROLA', label: 'set'|'rolă' } — coeficientul intern rămâne 1 (ROLA)
+export function primaryUom(product) {
+  const cat = (product?.categorie || '').toLowerCase()
+  const isHig = cat.includes('igien') || cat.includes('hig') || (product?.product_type || '').toUpperCase() === 'HIG'
+  return { code: 'ROLA', label: isHig ? 'set' : 'rolă' }
+}
+
 // ── UoM conversie ──
 export function toRole(cantitate, unitateSel, produs) {
   if (!cantitate || !produs) return cantitate || 0

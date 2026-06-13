@@ -68,6 +68,9 @@ const api = {
       return req('POST', `/api/upload/product-datasheet/${productId}`, form, true)
     },
     deleteDatasheet: id        => req('DELETE', `/api/upload/product-datasheet/${id}`),
+    listClients:  id           => req('GET',    `/api/products/${id}/clients`),
+    addClient:    (id, cid)    => req('POST',   `/api/products/${id}/clients`, { customer_id: cid }),
+    removeClient: (id, cid)    => req('DELETE', `/api/products/${id}/clients/${cid}`),
   },
   customers: {
     list:     ()               => req('GET',  '/api/customers'),
@@ -100,6 +103,7 @@ const api = {
     create:    data            => req('POST', '/api/orders', data),
     setStatus: (id, status, locationId) => req('PUT', `/api/orders/${id}/status`, { status, location_id: locationId }),
     addNote:   (id, text)      => req('POST', `/api/orders/${id}/notes`, { text }),
+    editLines:  (id, data)     => req('PUT',  `/api/orders/${id}/lines`, data),
     checkPayment: id           => req('POST', `/api/orders/${id}/check-payment`),
     proforma:  id              => req('GET',  `/api/orders/${id}/proforma`),
     pushSS:    (id, proforma)  => req('POST', `/api/orders/${id}/push-selectsoft`, { proforma }),

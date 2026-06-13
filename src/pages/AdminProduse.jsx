@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import { lei, fmtDate } from '../utils'
+import { primaryUom } from '../promoEngine.js'
 import api from '../api'
 
 function Toast({ msg, type = 'success', onDone }) {
@@ -93,6 +94,63 @@ const EMPTY_PRODUCT = {
   location_id: '', selectsoft_cod: '', um: 'BUC', base_price: 0,
   fsinc: false, fsinc_stoc: false, fsinc_pret: false, fdiscount: false,
   activ: true, image_url: null,
+}
+
+function ClientiAsociati({ productId, customers }) {
+  const [list, setList] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [selCid, setSelCid] = useState('')
+
+  const load = () => {
+    setLoading(true)
+    api.products.listClients(productId).then(r => { setList(r || []); setLoading(false) }).catch(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [productId])
+
+  const handleAdd = async () => {
+    if (!selCid) return
+    setAdding(true)
+    try { await api.products.addClient(productId, selCid); load(); setSelCid('') }
+    catch (e) { alert(e.message) }
+    setAdding(false)
+  }
+  const handleRemove = async (cid) => {
+    if (!confirm('Elimini asocierea?')) return
+    await api.products.removeClient(productId, cid).catch(e => alert(e.message))
+    load()
+  }
+
+  const existingIds = new Set(list.map(l => l.customer_id))
+  const available = customers.filter(c => !existingIds.has(c.id))
+
+  return (
+    <div>
+      <div className="section-title" style={{ marginBottom: 10 }}>Clienți care văd acest produs (privat)</div>
+      <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+        Produsul privat este vizibil DOAR clienților de mai jos. Produsele publice (fără asocieri) sunt vizibile tuturor.
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <select className="form-input" style={{ flex: 1 }} value={selCid} onChange={e => setSelCid(e.target.value)}>
+          <option value="">— selectează client —</option>
+          {available.map(c => <option key={c.id} value={c.id}>{c.name || c.company_name}</option>)}
+        </select>
+        <button className="btn-primary" onClick={handleAdd} disabled={adding || !selCid}>Adaugă</button>
+      </div>
+      {loading ? <div style={{ color: 'var(--text3)', fontSize: 13 }}>Se încarcă…</div> : list.length === 0 ? (
+        <div style={{ color: 'var(--text3)', fontSize: 13, padding: '12px 0' }}>Niciun client asociat — produsul este public.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {list.map(l => (
+            <div key={l.customer_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg)', borderRadius: 7, padding: '8px 12px', fontSize: 13 }}>
+              <span>{l.customer_name}</span>
+              <button onClick={() => handleRemove(l.customer_id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AdminProduse() {
@@ -199,7 +257,7 @@ export default function AdminProduse() {
   const currentProduct = isNew ? editForm : selected
   const TABS = isNew
     ? [{ id: 'detalii', label: 'Detalii produs' }]
-    : [{ id: 'detalii', label: 'Detalii' }, { id: 'preturi', label: 'Prețuri' }, { id: 'uom', label: 'UoM' }, { id: 'retetar', label: 'Rețetar' }]
+    : [{ id: 'detalii', label: 'Detalii' }, { id: 'preturi', label: 'Prețuri' }, { id: 'uom', label: 'UoM' }, { id: 'clienti', label: 'Clienți asociați' }, { id: 'retetar', label: 'Rețetar' }]
 
   return (
     <Layout title="Produse" subtitle={`${products.length} afișate din ${(db.products || []).length}`} actions={
@@ -418,7 +476,7 @@ export default function AdminProduse() {
 
                   <div className="section-title" style={{ marginBottom: 10, marginTop: 20 }}>Ambalare (definește UoM automat)</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-                    {[['Role / Bax', 'rolls_per_pack'], ['Baxuri / Palet Duba', 'packs_per_pallet_van'], ['Baxuri / Palet Camion', 'packs_per_pallet_truck']].map(([l, k]) => (
+                    {[[`${primaryUom(editForm).label.charAt(0).toUpperCase() + primaryUom(editForm).label.slice(1)} / Bax`, 'rolls_per_pack'], ['Baxuri / Palet Duba', 'packs_per_pallet_van'], ['Baxuri / Palet Camion', 'packs_per_pallet_truck']].map(([l, k]) => (
                       <div key={k} className="form-group" style={{ marginBottom: 0 }}>
                         <label>{l}</label>
                         <input type="number" min={1} className="w-full" value={editForm[k] || ''} onChange={e => setEditForm(p => ({ ...p, [k]: parseInt(e.target.value) || 0 }))} />
@@ -429,9 +487,7 @@ export default function AdminProduse() {
                   {/* UoM preview */}
                   {editForm.rolls_per_pack > 0 && (
                     <div style={{ background: 'var(--blue-bg)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: 'var(--blue-text)' }}>
-                      📦 <strong>1 BAX</strong> = {editForm.rolls_per_pack} role ·
-                      <strong> 1 PALET DUBA</strong> = {editForm.rolls_per_pack * (editForm.packs_per_pallet_van || 0)} role ·
-                      <strong> 1 PALET CAMION</strong> = {editForm.rolls_per_pack * (editForm.packs_per_pallet_truck || 0)} role
+                      {(() => { const u = primaryUom(editForm).label; return <>📦 <strong>1 BAX</strong> = {editForm.rolls_per_pack} {u} · <strong>1 PALET DUBA</strong> = {editForm.rolls_per_pack * (editForm.packs_per_pallet_van || 0)} {u} · <strong>1 PALET CAMION</strong> = {editForm.rolls_per_pack * (editForm.packs_per_pallet_truck || 0)} {u}</> })()}
                     </div>
                   )}
 
@@ -638,6 +694,11 @@ export default function AdminProduse() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* TAB CLIENȚI ASOCIAȚI */}
+              {tab === 'clienti' && !isNew && (
+                <ClientiAsociati productId={selected.id} customers={db.firms || db.customers || []} />
               )}
 
               {/* TAB REȚETAR */}

@@ -55,6 +55,8 @@ export default function AdminComenzi() {
   const [toast, setToast] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
   const [locationInput, setLocationInput] = useState('')
+  const [editModal, setEditModal] = useState(null)   // { orderId, lines: [...] }
+  const [editSaving, setEditSaving] = useState(false)
 
   const firms = db.firms.filter(f => f.status === 'activ')
   const orders = db.orders.filter(o => {
@@ -95,6 +97,39 @@ export default function AdminComenzi() {
     setSelected(prev => ({ ...prev, nrFactura: facturaInput.trim() }))
     setFacturaInput('')
     showToast('Factură setată!')
+  }
+
+  const PRE_SS_STATUSES = ['plasata', 'asteptare_plata', 'in_aprobare']
+
+  function openEditModal(order) {
+    setEditModal({
+      orderId: order.id,
+      lines: (order.lines || []).map(l => ({
+        productId: l.productId,
+        cantitate: l.cantitate,
+        uom_code: l.unitateSel || l.uom_code || 'ROLA',
+        pretUnitar: l.pretUnitar,
+        _orig: l,
+      })),
+    })
+  }
+
+  async function handleSaveEdit() {
+    if (!editModal) return
+    setEditSaving(true)
+    try {
+      const updated = await api.orders.editLines(editModal.orderId, { lines: editModal.lines })
+      // refresh selected order with new data
+      setSelected(prev => ({ ...prev, ...updated.order, lines: updated.order?.lines || prev.lines }))
+      // refresh db.orders
+      db.orders && db.orders.forEach((o, i) => { if (o.id === editModal.orderId) db.orders[i] = { ...o, ...(updated.order || {}) } })
+      setEditModal(null)
+      showToast('Comandă actualizată!')
+    } catch (e) {
+      showToast('Eroare: ' + e.message)
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   function handleAddNota() {
@@ -229,7 +264,14 @@ export default function AdminComenzi() {
             {/* Status flow */}
             {NEXT_STATUSES[selected.status]?.length > 0 && (
               <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Schimbă status:</div>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Schimbă status:</span>
+                  {selected.synced_at
+                    ? <span style={{ fontSize: 11, background: 'var(--green-bg)', color: 'var(--green-text)', borderRadius: 4, padding: '2px 8px' }}>✓ Trimisă în SS</span>
+                    : PRE_SS_STATUSES.includes(selected.status) && (
+                      <button className="btn btn-sm btn-secondary" onClick={() => openEditModal(selected)}>✏ Editează comanda</button>
+                    )}
+                </div>
                 <div className="flex gap-8">
                   {NEXT_STATUSES[selected.status].map(ns => (
                     <button key={ns} className={`btn btn-sm ${ns === 'anulata' ? 'btn-danger' : 'btn-primary'}`}
@@ -337,6 +379,72 @@ export default function AdminComenzi() {
 
             <div className="modal-footer">
               <button className="btn btn-primary" onClick={() => setSelected(null)}>Închide</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit order lines modal */}
+      {editModal && (
+        <div className="modal-overlay" onClick={() => !editSaving && setEditModal(null)}>
+          <div className="modal" style={{ width: 680 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-hdr">
+              <h3>Editare linii comandă</h3>
+              <button className="modal-close" onClick={() => setEditModal(null)} disabled={editSaving}>×</button>
+            </div>
+            <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text2)' }}>
+              Modifică cantitățile sau elimină linii. Totalurile se recalculează automat la salvare.
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Produs</th>
+                  <th>UoM</th>
+                  <th style={{ width: 90 }}>Cantitate</th>
+                  <th style={{ width: 110 }}>Preț/buc net</th>
+                  <th style={{ width: 40 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {editModal.lines.map((l, i) => {
+                  const p = db.products.find(pr => pr.id === l.productId)
+                  return (
+                    <tr key={i}>
+                      <td>
+                        <div style={{ fontWeight: 500, fontSize: 13 }}>{p?.name || l.productId}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{p?.cod}</div>
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--text3)' }}>{l.uom_code}</td>
+                      <td>
+                        <input
+                          type="number" min={1} style={{ width: 80 }}
+                          value={l.cantitate}
+                          onChange={e => {
+                            const v = Math.max(1, parseInt(e.target.value) || 1)
+                            setEditModal(prev => ({ ...prev, lines: prev.lines.map((x, j) => j === i ? { ...x, cantitate: v } : x) }))
+                          }}
+                        />
+                      </td>
+                      <td style={{ fontSize: 13 }}>{lei(l.pretUnitar)}</td>
+                      <td>
+                        <button className="btn btn-sm btn-danger" title="Elimină linia"
+                          onClick={() => setEditModal(prev => ({ ...prev, lines: prev.lines.filter((_, j) => j !== i) }))}>
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {editModal.lines.length === 0 && (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Nicio linie</td></tr>
+                )}
+              </tbody>
+            </table>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setEditModal(null)} disabled={editSaving}>Anulează</button>
+              <button className="btn btn-primary" onClick={handleSaveEdit} disabled={editSaving || editModal.lines.length === 0}>
+                {editSaving ? 'Se salvează...' : 'Salvează modificările'}
+              </button>
             </div>
           </div>
         </div>

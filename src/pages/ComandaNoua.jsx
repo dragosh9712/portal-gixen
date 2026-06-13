@@ -4,7 +4,7 @@ import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
 import { lei, eur } from '../utils'
-import { calculeazaCos, getPromotiiNotificabile } from '../promoEngine.js'
+import { calculeazaCos, getPromotiiNotificabile, primaryUom } from '../promoEngine.js'
 import { detectTransportType } from '../config/transport.js'
 
 const TVA = 0.21
@@ -334,8 +334,8 @@ export default function ComandaNoua() {
                         <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtVal(linie.totalBrutLinie)}</div>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                        {linie.cantitate} {uomLabel?.toLowerCase()} × {fmtVal(linie.pretClient)}/rolă
-                        <span style={{ marginLeft: 6, color: 'var(--text3)' }}>= {linie.cantRole} role</span>
+                        {linie.cantitate} {uomLabel?.toLowerCase()} × {fmtVal(linie.pretClient)}/{primaryUom(linie.produs).label}
+                        <span style={{ marginLeft: 6, color: 'var(--text3)' }}>= {linie.cantRole} {primaryUom(linie.produs).label}</span>
                       </div>
                       {disc.map((d, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--green-text)', marginTop: 2 }}>

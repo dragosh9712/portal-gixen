@@ -332,14 +332,12 @@ router.post('/', authenticateToken, async (req, res) => {
       { id, net: netFinal, tva: tvaTotal, gross: grossTotal,
         disc: totalDiscount, dlj: JSON.stringify(discountLines) })
 
-    // Selectsoft: proformă (limită credit depășită) sau comandă normală
+    // Selectsoft: proformă (limită credit depășită) — trimisă imediat
+    // Comenzi normale: push la APROBARE (PUT /status → aprobata), nu la plasare
     if (requiresProforma) {
       pushOrderToSelectsoft(id, { proforma: true })
         .then(nrIntern => nrIntern && console.log(`[SS] Proformă generată pentru ${nr}: nr_intern=${nrIntern}`))
         .catch(e => console.error('[SELECTSOFT proforma]', e.message))
-    } else if (process.env.SELECTSOFT_PUSH_ORDERS === 'true') {
-      pushOrderToSelectsoft(id)
-        .catch(e => console.error('[SELECTSOFT push order]', e.message))
     }
 
     // Send confirmation email to customer
@@ -371,7 +369,15 @@ router.put('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
     q += ` WHERE id=@id`
     await query(q, params)
 
-    // Send status change email to customer
+    // Push în SS la aprobare (o singură dată — guard synced_at IS NULL)
+    if (status === 'aprobata' && process.env.SELECTSOFT_PUSH_ORDERS === 'true') {
+      const check = await query('SELECT synced_at FROM orders WHERE id=@id', { id: req.params.id })
+      if (!check.recordset[0]?.synced_at) {
+        pushOrderToSelectsoft(req.params.id).catch(e => console.error('[SS push at aprobare]', e.message))
+      }
+    }
+
+    // Email notificare client
     const orderResult = await query(
       `SELECT o.order_number, u.email
        FROM orders o
@@ -385,6 +391,74 @@ router.put('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
 
     res.json({ message: `Status actualizat: ${status}` })
   } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PUT /api/orders/:id/lines — editare linii comandă (admin, doar pre-SS)
+router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const ordRes = await query('SELECT status, synced_at FROM orders WHERE id=@id', { id: req.params.id })
+    const ord = ordRes.recordset[0]
+    if (!ord) return res.status(404).json({ error: 'Comanda nu există' })
+    if (ord.synced_at) return res.status(409).json({ error: 'Comanda a fost deja trimisă în SelectSoft și nu mai poate fi modificată.' })
+    const editableStatuses = ['plasata', 'asteptare_plata', 'in_aprobare']
+    if (!editableStatuses.includes(ord.status)) return res.status(409).json({ error: `Comanda cu status '${ord.status}' nu poate fi editată.` })
+
+    const { lines, discount_lines, observations } = req.body
+    if (!lines?.length) return res.status(400).json({ error: 'Liniile nu pot fi goale' })
+
+    // Șterge liniile vechi și reinsertează
+    await query('DELETE FROM order_lines WHERE order_id=@id', { id: req.params.id })
+    let netTotal = 0
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i]
+      const productId = l.product_id || l.productId
+      const qty       = l.quantity || l.cantitate || 0
+      const uomCode   = l.uom_code || l.unitateSel || 'ROLA'
+      const unitPrice = l.unit_price || l.pretUnitar || 0
+      const lineTotal = Math.round(qty * unitPrice * 100) / 100
+      const lineTva   = Math.round(lineTotal * TVA * 100) / 100
+      netTotal += lineTotal
+      await query(`
+        INSERT INTO order_lines (order_id, product_id, uom_code, line_number,
+          quantity, quantity_in_rolls, unit_price, unit_price_with_tva,
+          line_total, line_tva, line_total_with_tva)
+        VALUES (@oid, @pid, @ucode, @ln, @qty, @qr, @up, @upvat, @lt, @ltva, @ltvat)`, {
+        oid: req.params.id, pid: productId, ucode: uomCode, ln: i + 1,
+        qty, qr: l.quantity_in_rolls || null, up: unitPrice,
+        upvat: Math.round(unitPrice * (1 + TVA) * 100) / 100,
+        lt: lineTotal, ltva: lineTva, ltvat: Math.round((lineTotal + lineTva) * 100) / 100,
+      })
+    }
+
+    const discountLines = discount_lines || []
+    const totalDiscount = Math.round(discountLines.reduce((s, d) => s + (parseFloat(d.valoare) || 0), 0) * 100) / 100
+    const netFinal   = Math.max(0, Math.round((netTotal - totalDiscount) * 100) / 100)
+    const tvaTotal   = Math.round(netFinal * TVA * 100) / 100
+    const grossTotal = Math.round((netFinal + tvaTotal) * 100) / 100
+
+    await query(`UPDATE orders SET net_total=@net, tva_total=@tva, gross_total=@gross,
+      total_discount=@disc, discount_lines_json=@dlj${observations != null ? ', observations=@obs' : ''}
+      WHERE id=@id`, {
+      id: req.params.id, net: netFinal, tva: tvaTotal, gross: grossTotal,
+      disc: totalDiscount, dlj: JSON.stringify(discountLines),
+      ...(observations != null ? { obs: observations } : {}),
+    })
+
+    // Notificare email client
+    const orderResult = await query(
+      `SELECT o.order_number, u.email FROM orders o
+       JOIN users u ON u.customer_id = o.customer_id AND u.delegate_type = 'primary' AND u.status != 'inactive'
+       WHERE o.id = @id`, { id: req.params.id })
+    const row = orderResult.recordset[0]
+    if (row?.email) {
+      emailSvc.sendOrderEdited(row.email, { nr: row.order_number, id: req.params.id }, req.user.name || req.user.email).catch(() => {})
+    }
+
+    res.json({ message: 'Comanda a fost actualizată', net_total: netFinal, tva_total: tvaTotal, gross_total: grossTotal })
+  } catch (err) {
+    console.error('PUT /orders/:id/lines error:', err.message)
     res.status(500).json({ error: err.message })
   }
 })

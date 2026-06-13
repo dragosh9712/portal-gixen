@@ -4,7 +4,7 @@ import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
 import { lei, cuTva } from '../utils'
-import { esteActiva } from '../promoEngine.js'
+import { esteActiva, primaryUom } from '../promoEngine.js'
 
 function ProductImage({ src, alt, style }) {
   const [err, setErr] = useState(false)
@@ -110,7 +110,7 @@ export default function Produse() {
                 {pretDisc > 0 ? (
                   <div style={{ fontSize: 15, fontWeight: 700 }}>
                     {fmtPret(pretDisc)}
-                    <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/rolă</span>
+                    <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 400 }}>/{primaryUom(p).label}</span>
                   </div>
                 ) : (
                   <div style={{ fontSize: 12, color: 'var(--text3)' }}>Preț la cerere</div>
@@ -162,7 +162,7 @@ export default function Produse() {
                   const pretDisc = globalDiscount > 0 ? Math.round(pretRola * (1 - globalDiscount) * 100) / 100 : pretRola
                   return (
                     <div style={{ marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 3 }}>Preț / rolă</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 3 }}>Preț / {primaryUom(selected).label}</div>
                       <div style={{ fontSize: 20, fontWeight: 700 }}>{fmtPret(pretDisc)}<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text3)' }}> fără TVA</span></div>
                       <div style={{ fontSize: 13, color: 'var(--text2)' }}>{fmtPret(cuTva(pretDisc))} <span style={{ color: 'var(--text3)' }}>cu TVA</span></div>
                       {globalDiscount > 0 && <div style={{ fontSize: 11, color: 'var(--green-text)' }}>discount {Math.round(globalDiscount * 100)}% aplicat</div>}
