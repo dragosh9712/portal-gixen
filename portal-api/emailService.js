@@ -157,9 +157,34 @@ async function sendSurveyReminder(email, firmName) {
 }
 
 async function sendOrderEdited(email, order, editedBy, reason) {
+  const fmtLei = v => (Math.round((v || 0) * 100) / 100).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RON'
+  const lines = order.lines || []
+  const linesTable = lines.length ? `
+    <div style="font-size:12px;font-weight:600;color:#334155;margin:16px 0 6px">Forma actualizată a comenzii:</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+      <thead>
+        <tr style="background:#f1f5f9;color:#475569">
+          <th style="text-align:left;padding:7px 10px;border:1px solid #e2e8f0">Produs</th>
+          <th style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">Cant.</th>
+          <th style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">UM</th>
+          <th style="text-align:right;padding:7px 10px;border:1px solid #e2e8f0">Total linie</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lines.map(l => `
+          <tr>
+            <td style="padding:7px 10px;border:1px solid #e2e8f0">${l.productName || l.product_name || ''}</td>
+            <td style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">${l.cantitate != null ? l.cantitate : (l.quantity || '')}</td>
+            <td style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">${l.uomCode || l.uom_code || ''}</td>
+            <td style="text-align:right;padding:7px 10px;border:1px solid #e2e8f0">${fmtLei(l.total != null ? l.total : l.line_total)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="text-align:right;font-size:14px;font-weight:700;color:#0f172a;margin-bottom:8px">Total comandă (cu TVA): ${fmtLei(order.total)}</div>` : ''
   const html = wrap(`Comandă modificată — #${order.nr || order.id}`, `
     <p style="color:#444;line-height:1.7">Comanda dumneavoastră <strong>#${order.nr || order.id}</strong> a fost modificată de echipa Gixen.</p>
     ${reason ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;padding:14px;margin:16px 0;color:#92400e;font-size:13px"><strong>Motiv modificare:</strong> ${reason}</div>` : ''}
+    ${linesTable}
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;padding:12px 14px;margin:12px 0;color:#075985;font-size:13px">
       Modificat de: <strong>${editedBy || 'administrator'}</strong>
     </div>

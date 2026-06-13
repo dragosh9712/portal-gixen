@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import Layout from '../Layout'
 import { useStore } from '../StoreContext'
 import api from '../api'
 import { lei, leiCuTva, cuTva, tvaVal, fmtDate, statusBadge } from '../utils'
+import { calculeazaCos, primaryUom } from '../promoEngine.js'
+import { detectTransportType } from '../config/transport.js'
 import StatusTracker from '../components/StatusTracker'
 import { TransportDocsAdmin } from '../components/TransportDocs'
 import ExportCSV from '../components/ExportCSV'
@@ -32,7 +34,7 @@ function Toast({ msg, onDone }) {
 }
 
 export default function AdminComenzi() {
-  const { db, updateOrderStatus, setFactura, addNotaInterna, bulkUpdateOrderStatus, updateTransport, updateDocumente, updateAdresaLivrare } = useStore()
+  const { db, updateOrderStatus, setFactura, addNotaInterna, bulkUpdateOrderStatus, updateTransport, updateDocumente, updateAdresaLivrare, getPretPentruClient, refreshOrders } = useStore()
   const routerLocation = useLocation()
   const locations = db.locations || []
   const [filterStatus, setFilterStatus] = useState('toate')
@@ -99,33 +101,120 @@ export default function AdminComenzi() {
     showToast('Factură setată!')
   }
 
-  const PRE_SS_STATUSES = ['plasata', 'asteptare_plata', 'in_aprobare']
+  // O comandă se poate edita DOAR cât e în status 'plasata' și netrimisă în SS
+  const canEditOrder = o => o && o.status === 'plasata' && !o.synced_at
+
+  // ── Helpers UoM (aliniat cu ComandaNoua) ──
+  function getUomCoeficient(product, code) {
+    return (product?.product_uom || []).find(u => u.uom_code === code)?.coeficient || 1
+  }
+  function normalizeUomKey(s) {
+    return (s || '').toString().toUpperCase().replace(/[\s()]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+  }
+  function resolveAssignedUom(product, firma) {
+    if (!firma?.paletizare_preferata) return null
+    const key = normalizeUomKey(firma.paletizare_preferata)
+    const uoms = (product?.product_uom || []).filter(u => u.is_orderable)
+    return uoms.find(u => normalizeUomKey(u.uom_code) === key || normalizeUomKey(u.uom_name) === key)?.uom_code || null
+  }
+  function defaultUomFor(product, firma) {
+    const uoms = (product?.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
+    return resolveAssignedUom(product, firma) || uoms.find(u => u.uom_code === 'BAX')?.uom_code || uoms[0]?.uom_code || 'ROLA'
+  }
+
+  const editFirma = editModal ? db.firms.find(f => f.id === editModal.firmId) : null
+
+  // Produse vizibile firmei (pentru adăugare linie nouă)
+  const editVisibleProducts = useMemo(() => {
+    if (!editFirma) return []
+    const viz = editFirma.vizibilitate_produse || 'gixen_si_proprii'
+    return (db.products || []).filter(p => {
+      if (!p.activ) return false
+      const isPrivatAl  = p.private_brand_firm_id === editFirma.id
+      const isGixen     = !p.private_brand_firm_id
+      const isAltClient = p.private_brand_firm_id && !isPrivatAl
+      if (isAltClient) return false
+      if (viz === 'doar_proprii' && !isPrivatAl) return false
+      if (viz === 'gixen_only'   && !isGixen)   return false
+      return true
+    })
+  }, [editFirma, db.products])
+
+  // Recalcul live (refolosește exact motorul coșului)
+  const editCalc = useMemo(() => {
+    if (!editModal || !editFirma) return { liniiCos: [], liniiCalculate: [], discountLinii: [], totalNet: 0, totalDiscount: 0, autoTransport: 'Van' }
+    const liniiCos = (editModal.lines || []).map(l => {
+      const produs = (db.products || []).find(p => p.id === l.productId)
+      if (!produs || !l.cantitate) return null
+      const coef = getUomCoeficient(produs, l.unitateSel)
+      const cantRole = l.cantitate * coef
+      const pretClient = getPretPentruClient(l.productId, editFirma.id)
+      return { productId: l.productId, cantitate: l.cantitate, unitateSel: l.unitateSel, cantRole, produs, totalBrutLinie: pretClient * cantRole, pretUnitar: pretClient }
+    }).filter(Boolean)
+    const calc = calculeazaCos(liniiCos, editFirma, db)
+    return { liniiCos, ...calc, autoTransport: detectTransportType(liniiCos) }
+  }, [editModal, editFirma, db, getPretPentruClient])
+
+  const editTransport = editModal?.transportOverride || editCalc.autoTransport
+  const editTotalCuTva = Math.round(editCalc.totalNet * 1.21 * 100) / 100
 
   function openEditModal(order) {
     setEditModal({
       orderId: order.id,
+      firmId: order.firmId,
       reason: '',
+      transportOverride: null,
       lines: (order.lines || []).map(l => ({
         productId: l.productId,
         cantitate: l.cantitate,
-        uom_code: l.unitateSel || l.uom_code || 'ROLA',
-        pretUnitar: l.pretUnitar,
-        _orig: l,
+        unitateSel: l.unitateSel || l.uomCode || l.uom_code || 'ROLA',
       })),
+    })
+  }
+
+  function setEditLineQty(productId, cantitate) {
+    setEditModal(prev => ({ ...prev, lines: prev.lines.map(l => l.productId === productId ? { ...l, cantitate: Math.max(0, cantitate) } : l) }))
+  }
+  function setEditLineUom(productId, unitateSel) {
+    setEditModal(prev => ({ ...prev, lines: prev.lines.map(l => l.productId === productId ? { ...l, unitateSel } : l) }))
+  }
+  function removeEditLine(productId) {
+    setEditModal(prev => ({ ...prev, lines: prev.lines.filter(l => l.productId !== productId) }))
+  }
+  function addEditLine(productId) {
+    if (!productId) return
+    setEditModal(prev => {
+      if (prev.lines.some(l => l.productId === productId)) return prev
+      const product = (db.products || []).find(p => p.id === productId)
+      return { ...prev, lines: [...prev.lines, { productId, cantitate: 1, unitateSel: defaultUomFor(product, editFirma) }] }
     })
   }
 
   async function handleSaveEdit() {
     if (!editModal) return
+    if (!editCalc.liniiCalculate.length) return showToast('Comanda trebuie să aibă cel puțin o linie!')
     setEditSaving(true)
     try {
-      const updated = await api.orders.editLines(editModal.orderId, { lines: editModal.lines, reason: editModal.reason })
-      // refresh selected order with new data
-      setSelected(prev => ({ ...prev, ...updated.order, lines: updated.order?.lines || prev.lines }))
-      // refresh db.orders
-      db.orders && db.orders.forEach((o, i) => { if (o.id === editModal.orderId) db.orders[i] = { ...o, ...(updated.order || {}) } })
+      const lines = editCalc.liniiCalculate.map(l => ({
+        productId: l.productId,
+        cantitate: l.cantitate,
+        unitateSel: l.unitateSel,
+        uom_code: l.unitateSel,
+        uom_id: (l.produs.product_uom || []).find(u => u.uom_code === l.unitateSel)?.uom_id,
+        pretUnitar: Math.round((l.pretAfisatPerUm != null ? l.pretAfisatPerUm : l.pretUnitar * getUomCoeficient(l.produs, l.unitateSel)) * 100) / 100,
+        total: Math.round(l.totalBrutLinie * 100) / 100,
+        quantity_in_rolls: l.cantRole,
+      }))
+      const res = await api.orders.editLines(editModal.orderId, {
+        lines,
+        discount_lines: editCalc.discountLinii,
+        reason: editModal.reason,
+        transport_type: editTransport,
+      })
+      await refreshOrders()
+      if (res.order) setSelected(prev => (prev && prev.id === editModal.orderId ? res.order : prev))
       setEditModal(null)
-      showToast('Comandă actualizată!')
+      showToast('Comandă actualizată — clientul a fost notificat pe email!')
     } catch (e) {
       showToast('Eroare: ' + e.message)
     } finally {
@@ -269,7 +358,7 @@ export default function AdminComenzi() {
                   <span>Schimbă status:</span>
                   {selected.synced_at
                     ? <span style={{ fontSize: 11, background: 'var(--green-bg)', color: 'var(--green-text)', borderRadius: 4, padding: '2px 8px' }}>✓ Trimisă în SS</span>
-                    : PRE_SS_STATUSES.includes(selected.status) && (
+                    : canEditOrder(selected) && (
                       <button className="btn btn-sm btn-secondary" onClick={() => openEditModal(selected)}>✏ Editează comanda</button>
                     )}
                 </div>
@@ -385,76 +474,112 @@ export default function AdminComenzi() {
         </div>
       )}
 
-      {/* Edit order lines modal */}
+      {/* Edit order lines modal — mini-coș */}
       {editModal && (
         <div className="modal-overlay" onClick={() => !editSaving && setEditModal(null)}>
-          <div className="modal" style={{ width: 680 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width: 760, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="modal-hdr">
-              <h3>Editare linii comandă</h3>
+              <h3>Editare comandă {editFirma ? `· ${editFirma.name}` : ''}</h3>
               <button className="modal-close" onClick={() => setEditModal(null)} disabled={editSaving}>×</button>
             </div>
             <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text2)' }}>
-              Modifică cantitățile sau elimină linii. Totalurile se recalculează automat la salvare.
+              Schimbă cantitatea sau unitatea de măsură (palet duba / TIR), elimină sau adaugă produse. Totalurile și transportul se recalculează automat.
             </div>
+
             <table>
               <thead>
                 <tr>
                   <th>Produs</th>
-                  <th>UoM</th>
+                  <th style={{ width: 150 }}>Unitate măsură</th>
                   <th style={{ width: 90 }}>Cantitate</th>
-                  <th style={{ width: 110 }}>Preț/buc net</th>
+                  <th className="text-right" style={{ width: 120 }}>Total linie</th>
                   <th style={{ width: 40 }}></th>
                 </tr>
               </thead>
               <tbody>
-                {editModal.lines.map((l, i) => {
-                  const p = db.products.find(pr => pr.id === l.productId)
+                {editCalc.liniiCalculate.map(l => {
+                  const uoms = (l.produs.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
                   return (
-                    <tr key={i}>
+                    <tr key={l.productId}>
                       <td>
-                        <div style={{ fontWeight: 500, fontSize: 13 }}>{p?.name || l.productId}</div>
-                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{p?.cod}</div>
+                        <div style={{ fontWeight: 500, fontSize: 13 }}>{l.produs?.name || l.productId}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>
+                          {l.produs?.cod} · {lei(l.pretClient)}/{primaryUom(l.produs).label}
+                        </div>
                       </td>
-                      <td style={{ fontSize: 12, color: 'var(--text3)' }}>{l.uom_code}</td>
                       <td>
-                        <input
-                          type="number" min={1} style={{ width: 80 }}
-                          value={l.cantitate}
-                          onChange={e => {
-                            const v = Math.max(1, parseInt(e.target.value) || 1)
-                            setEditModal(prev => ({ ...prev, lines: prev.lines.map((x, j) => j === i ? { ...x, cantitate: v } : x) }))
-                          }}
-                        />
+                        <select value={l.unitateSel} onChange={e => setEditLineUom(l.productId, e.target.value)}
+                          style={{ width: '100%', fontSize: 12, padding: '4px 6px' }}>
+                          {uoms.map(u => <option key={u.uom_code} value={u.uom_code}>{u.uom_name} (×{u.coeficient})</option>)}
+                        </select>
                       </td>
-                      <td style={{ fontSize: 13 }}>{lei(l.pretUnitar)}</td>
                       <td>
-                        <button className="btn btn-sm btn-danger" title="Elimină linia"
-                          onClick={() => setEditModal(prev => ({ ...prev, lines: prev.lines.filter((_, j) => j !== i) }))}>
-                          ✕
-                        </button>
+                        <input type="number" min={1} style={{ width: 80 }} value={l.cantitate}
+                          onChange={e => setEditLineQty(l.productId, parseInt(e.target.value) || 0)} />
+                      </td>
+                      <td className="text-right" style={{ fontSize: 13 }}>
+                        <b>{lei(cuTva(l.totalBrutLinie))}</b>
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{l.cantRole} {primaryUom(l.produs).label}</div>
+                      </td>
+                      <td>
+                        <button className="btn btn-sm btn-danger" title="Elimină linia" onClick={() => removeEditLine(l.productId)}>✕</button>
                       </td>
                     </tr>
                   )
                 })}
-                {editModal.lines.length === 0 && (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Nicio linie</td></tr>
+                {editCalc.liniiCalculate.length === 0 && (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: 14 }}>Nicio linie — adaugă un produs mai jos</td></tr>
                 )}
               </tbody>
             </table>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Motiv modificare (trimis clientului pe email)</label>
-              <textarea
-                rows={2}
-                style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
-                placeholder="ex: Prețul unui produs s-a actualizat / cantitate incorectă..."
-                value={editModal.reason}
-                onChange={e => setEditModal(prev => ({ ...prev, reason: e.target.value }))}
-              />
+
+            {/* Adaugă produs */}
+            <div className="flex gap-8" style={{ marginTop: 10, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--text3)' }}>+ Adaugă produs:</span>
+              <select defaultValue="" style={{ flex: 1, fontSize: 12 }}
+                onChange={e => { addEditLine(e.target.value); e.target.value = '' }}>
+                <option value="">— selectează produs —</option>
+                {editVisibleProducts
+                  .filter(p => !editModal.lines.some(l => l.productId === p.id))
+                  .map(p => <option key={p.id} value={p.id}>{p.name} {p.cod ? `(${p.cod})` : ''}</option>)}
+              </select>
             </div>
+
+            {/* Transport */}
+            <div className="flex gap-8" style={{ marginTop: 14, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--text3)' }}>Transport:</span>
+              <select value={editTransport}
+                onChange={e => setEditModal(prev => ({ ...prev, transportOverride: e.target.value }))}
+                style={{ fontSize: 12, padding: '4px 6px' }}>
+                <option value="Van">Duba (Van)</option>
+                <option value="Truck">TIR / Camion</option>
+              </select>
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                (auto-detectat: {editCalc.autoTransport === 'Truck' ? 'TIR' : 'Duba'})
+              </span>
+            </div>
+
+            {/* Sumar */}
+            <div className="summary-box" style={{ marginTop: 14 }}>
+              <div className="summary-line"><span>Subtotal fără TVA</span><span>{lei(editCalc.totalBrut)}</span></div>
+              {editCalc.totalDiscount !== 0 && <div className="summary-line" style={{ color: 'var(--green-text)' }}><span>Discounturi</span><span>{lei(-editCalc.totalDiscount)}</span></div>}
+              <div className="summary-line"><span>Net fără TVA</span><span><b>{lei(editCalc.totalNet)}</b></span></div>
+              <div className="summary-line"><span>TVA 21%</span><span>{lei(tvaVal(editCalc.totalNet))}</span></div>
+              <div className="summary-line total"><span>Total cu TVA</span><span>{lei(editTotalCuTva)}</span></div>
+            </div>
+
+            <div style={{ margin: '14px 0 4px' }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Motiv modificare (trimis clientului pe email)</label>
+              <textarea rows={2} style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+                placeholder="ex: Nu putem produce articolul X — l-am înlocuit cu Y / am ajustat cantitatea..."
+                value={editModal.reason}
+                onChange={e => setEditModal(prev => ({ ...prev, reason: e.target.value }))} />
+            </div>
+
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setEditModal(null)} disabled={editSaving}>Anulează</button>
-              <button className="btn btn-primary" onClick={handleSaveEdit} disabled={editSaving || editModal.lines.length === 0}>
-                {editSaving ? 'Se salvează...' : 'Salvează modificările'}
+              <button className="btn btn-primary" onClick={handleSaveEdit} disabled={editSaving || editCalc.liniiCalculate.length === 0}>
+                {editSaving ? 'Se salvează...' : 'Salvează și notifică clientul'}
               </button>
             </div>
           </div>

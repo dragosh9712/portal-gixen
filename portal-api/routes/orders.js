@@ -395,17 +395,38 @@ router.put('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   }
 })
 
-// PUT /api/orders/:id/lines — editare linii comandă (admin, doar pre-SS)
+// Helper: încarcă o comandă normalizată după id (refolosit la edit response)
+async function fetchOrderNormalized(orderId) {
+  const result = await query(`
+    SELECT o.*,
+      c.name AS firm_name,
+      a.name AS agent_name,
+      l.name AS location_name,
+      (SELECT ol.id, ol.product_id, ol.uom_code, ol.quantity, ol.quantity_in_rolls,
+              ol.unit_price, ol.unit_price_with_tva, ol.line_total, ol.line_tva,
+              ol.line_total_with_tva, p.name AS product_name, p.code AS product_code
+       FROM order_lines ol
+       JOIN products p ON ol.product_id = p.id
+       WHERE ol.order_id = o.id
+       FOR JSON PATH) AS lines_json
+    FROM orders o
+    LEFT JOIN customers c ON o.customer_id = c.id
+    LEFT JOIN agents a ON o.agent_id = a.id
+    LEFT JOIN locations l ON o.location_id = l.id
+    WHERE o.id = @id`, { id: orderId })
+  return result.recordset[0] ? normalizeOrder(result.recordset[0]) : null
+}
+
+// PUT /api/orders/:id/lines — editare linii comandă (admin, DOAR status plasata, pre-SS)
 router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const ordRes = await query('SELECT status, synced_at FROM orders WHERE id=@id', { id: req.params.id })
+    const ordRes = await query('SELECT status, synced_at, transport_type FROM orders WHERE id=@id', { id: req.params.id })
     const ord = ordRes.recordset[0]
     if (!ord) return res.status(404).json({ error: 'Comanda nu există' })
     if (ord.synced_at) return res.status(409).json({ error: 'Comanda a fost deja trimisă în SelectSoft și nu mai poate fi modificată.' })
-    const editableStatuses = ['plasata', 'asteptare_plata', 'in_aprobare']
-    if (!editableStatuses.includes(ord.status)) return res.status(409).json({ error: `Comanda cu status '${ord.status}' nu poate fi editată.` })
+    if (ord.status !== 'plasata') return res.status(409).json({ error: `Comanda poate fi editată doar în status 'Plasată' (status curent: '${ord.status}').` })
 
-    const { lines, discount_lines, observations, reason } = req.body
+    const { lines, discount_lines, observations, reason, transport_type } = req.body
     if (!lines?.length) return res.status(400).json({ error: 'Liniile nu pot fi goale' })
 
     // Șterge liniile vechi și reinsertează
@@ -417,7 +438,8 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
       const qty       = l.quantity || l.cantitate || 0
       const uomCode   = l.uom_code || l.unitateSel || 'ROLA'
       const unitPrice = l.unit_price || l.pretUnitar || 0
-      const lineTotal = Math.round(qty * unitPrice * 100) / 100
+      const qtyRolls  = l.quantity_in_rolls != null ? l.quantity_in_rolls : null
+      const lineTotal = l.total != null ? Math.round(l.total * 100) / 100 : Math.round(qty * unitPrice * 100) / 100
       const lineTva   = Math.round(lineTotal * TVA * 100) / 100
       netTotal += lineTotal
       await query(`
@@ -426,7 +448,7 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
           line_total, line_tva, line_total_with_tva)
         VALUES (@oid, @pid, @ucode, @ln, @qty, @qr, @up, @upvat, @lt, @ltva, @ltvat)`, {
         oid: req.params.id, pid: productId, ucode: uomCode, ln: i + 1,
-        qty, qr: l.quantity_in_rolls || null, up: unitPrice,
+        qty, qr: qtyRolls, up: unitPrice,
         upvat: Math.round(unitPrice * (1 + TVA) * 100) / 100,
         lt: lineTotal, ltva: lineTva, ltvat: Math.round((lineTotal + lineTva) * 100) / 100,
       })
@@ -437,26 +459,34 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
     const netFinal   = Math.max(0, Math.round((netTotal - totalDiscount) * 100) / 100)
     const tvaTotal   = Math.round(netFinal * TVA * 100) / 100
     const grossTotal = Math.round((netFinal + tvaTotal) * 100) / 100
+    const tt = transport_type || ord.transport_type || 'Van'
 
     await query(`UPDATE orders SET net_total=@net, tva_total=@tva, gross_total=@gross,
-      total_discount=@disc, discount_lines_json=@dlj${observations != null ? ', observations=@obs' : ''}
+      total_discount=@disc, discount_lines_json=@dlj, transport_type=@tt${observations != null ? ', observations=@obs' : ''}
       WHERE id=@id`, {
       id: req.params.id, net: netFinal, tva: tvaTotal, gross: grossTotal,
-      disc: totalDiscount, dlj: JSON.stringify(discountLines),
+      disc: totalDiscount, dlj: JSON.stringify(discountLines), tt,
       ...(observations != null ? { obs: observations } : {}),
     })
 
-    // Notificare email client
-    const orderResult = await query(
-      `SELECT o.order_number, u.email FROM orders o
-       JOIN users u ON u.customer_id = o.customer_id AND u.delegate_type = 'primary' AND u.status != 'inactive'
-       WHERE o.id = @id`, { id: req.params.id })
-    const row = orderResult.recordset[0]
-    if (row?.email) {
-      emailSvc.sendOrderEdited(row.email, { nr: row.order_number, id: req.params.id }, req.user.name || req.user.email, reason).catch(() => {})
+    const updatedOrder = await fetchOrderNormalized(req.params.id)
+
+    // Notificare email client cu noua formă a comenzii + motiv
+    const emailRow = await query(
+      `SELECT u.email FROM users u
+       WHERE u.customer_id = (SELECT customer_id FROM orders WHERE id=@id)
+         AND u.delegate_type = 'primary' AND u.status != 'inactive'`, { id: req.params.id })
+    const clientEmail = emailRow.recordset[0]?.email
+    if (clientEmail && updatedOrder) {
+      emailSvc.sendOrderEdited(
+        clientEmail,
+        { nr: updatedOrder.nr, id: req.params.id, lines: updatedOrder.lines, total: updatedOrder.total },
+        req.user.name || req.user.email,
+        reason
+      ).catch(() => {})
     }
 
-    res.json({ message: 'Comanda a fost actualizată', net_total: netFinal, tva_total: tvaTotal, gross_total: grossTotal })
+    res.json({ message: 'Comanda a fost actualizată', order: updatedOrder })
   } catch (err) {
     console.error('PUT /orders/:id/lines error:', err.message)
     res.status(500).json({ error: err.message })
