@@ -55,6 +55,7 @@ export default function AdminComenzi() {
   const [notaInput, setNotaInput] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [toast, setToast] = useState(null)
+  const [proformaNrInput, setProformaNrInput] = useState('')
   const [confirmAction, setConfirmAction] = useState(null)
   const [locationInput, setLocationInput] = useState('')
   const [editModal, setEditModal] = useState(null)   // { orderId, lines: [...] }
@@ -190,6 +191,16 @@ export default function AdminComenzi() {
     })
   }
 
+  async function handleSetProformaNr() {
+    if (!selected || !proformaNrInput.trim()) return
+    try {
+      await api.orders.setProformaNr(selected.id, proformaNrInput.trim())
+      setSelected(prev => ({ ...prev, proformaNr: proformaNrInput.trim() }))
+      await refreshOrders()
+      showToast('Nr. intern SS salvat — monitorul va verifica plata automat')
+    } catch (e) { showToast('Eroare: ' + e.message) }
+  }
+
   async function handleSaveEdit() {
     if (!editModal) return
     if (!editCalc.liniiCalculate.length) return showToast('Comanda trebuie să aibă cel puțin o linie!')
@@ -281,12 +292,17 @@ export default function AdminComenzi() {
                   const nextStatuses = NEXT_STATUSES[o.status] || []
                   const isSelected = selectedIds.includes(o.id)
                   return (
-                    <tr key={o.id} className={isSelected ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelected(o)}>
+                    <tr key={o.id} className={isSelected ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => { setSelected(o); setProformaNrInput(o.proformaNr || '') }}>
                       <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(o.id)} /></td>
                       <td><CopyButton text={o.nr}><b>{o.nr}</b></CopyButton></td>
                       <td style={{ fontSize: 12 }}>{firm?.name}</td>
                       <td><b>{lei(o.total)}</b></td>
-                      <td>{statusBadge(o.status)}</td>
+                      <td>
+                        {statusBadge(o.status)}
+                        {o.paymentStatus === 'asteptare_plata' && !o.proformaNr && <span className="badge" style={{background:'var(--orange-bg)',color:'var(--orange-text)',marginLeft:4,fontSize:11}}>💰 Fără nr. SS</span>}
+                        {o.paymentStatus === 'asteptare_plata' && o.proformaNr && <span className="badge" style={{background:'var(--orange-bg)',color:'var(--orange-text)',marginLeft:4,fontSize:11}}>💰 Neachitată</span>}
+                        {o.paymentStatus === 'platit' && <span className="badge" style={{background:'var(--green-bg)',color:'var(--green-text)',marginLeft:4,fontSize:11}}>✓ Achitată</span>}
+                      </td>
                       <td style={{ fontSize: 12 }}>{fmtDate(o.dataComanda)}</td>
                       <td style={{ fontSize: 12 }}>{o.nrFactura || <span style={{ color: 'var(--text3)' }}>—</span>}</td>
                       <td onClick={e => e.stopPropagation()}>
@@ -325,15 +341,28 @@ export default function AdminComenzi() {
                 background: selected.paymentStatus === 'platit' ? 'var(--green-bg)' : 'var(--orange-bg)',
                 borderRadius: 8, padding: '10px 14px', margin: '12px 0', fontSize: 12,
                 color: selected.paymentStatus === 'platit' ? 'var(--green-text)' : 'var(--orange-text)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                display: 'flex', flexDirection: 'column', gap: 8,
               }}>
                 <div>
                   {selected.paymentStatus === 'platit'
                     ? <><strong>✓ Plata proformei confirmată în Selectsoft</strong>{selected.paymentConfirmedAt && <span> · {fmtDate(selected.paymentConfirmedAt)}</span>} — comanda poate fi aprobată</>
-                    : <><strong>💰 În așteptarea plății proformei</strong>{selected.proformaNr ? <span> · SS nr. intern: {selected.proformaNr}</span> : <span> · proforma se generează în SS</span>}</>}
+                    : <><strong>💰 În așteptarea plății proformei</strong>{selected.proformaNr ? <span> · SS nr. intern: <b>{selected.proformaNr}</b></span> : <span> · introduceți nr. intern SS mai jos</span>}</>}
+                  {selected.paymentStatus !== 'platit' && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <input
+                        value={proformaNrInput}
+                        onChange={e => setProformaNrInput(e.target.value)}
+                        placeholder="Nr. intern SS proformă (ex: 0000010583)"
+                        style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)', fontSize: 12 }}
+                      />
+                      <button className="btn btn-sm btn-primary" onClick={handleSetProformaNr} disabled={!proformaNrInput.trim()}>
+                        Salvează
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {selected.paymentStatus !== 'platit' && (
-                  <button className="btn btn-sm btn-secondary" onClick={async () => {
+                  <button className="btn btn-sm btn-secondary" style={{ flexShrink: 0 }} onClick={async () => {
                     try {
                       const r = await api.orders.checkPayment(selected.id)
                       if (r.paid) {

@@ -533,6 +533,22 @@ router.post('/:id/check-payment', authenticateToken, async (req, res) => {
   }
 })
 
+// PUT /api/orders/:id/proforma-nr — admin setează manual nr_intern SS al proformei
+router.put('/:id/proforma-nr', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { proforma_nr_intern } = req.body
+    if (!proforma_nr_intern?.toString().trim()) return res.status(400).json({ error: 'Nr. intern lipsă' })
+    await ensurePaymentColumns()
+    const ordRes = await query('SELECT payment_status FROM orders WHERE id=@id', { id: req.params.id })
+    if (!ordRes.recordset[0]) return res.status(404).json({ error: 'Comanda nu există' })
+    await query('UPDATE orders SET proforma_nr_intern=@nr WHERE id=@id',
+      { id: req.params.id, nr: proforma_nr_intern.toString().trim() })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /api/orders/:id/proforma — detalii proformă (incl. liniile din SS dacă există)
 router.get('/:id/proforma', authenticateToken, async (req, res) => {
   try {
