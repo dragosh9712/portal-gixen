@@ -276,15 +276,22 @@ export default function ComandaNoua() {
                     </select>
                   )}
 
-                  {/* Qty */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) - 1, currentUom)}
-                      style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                    <input type="number" min="0" value={inCart?.cantitate || ''} placeholder="0"
-                      onChange={e => setQty(product.id, parseInt(e.target.value) || 0, currentUom)}
-                      style={{ width: 56, textAlign: 'center', fontSize: 13, padding: '4px 6px' }} />
-                    <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) + 1, currentUom)}
-                      style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                  {/* Qty + price per UoM */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) - 1, currentUom)}
+                        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                      <input type="number" min="0" value={inCart?.cantitate || ''} placeholder="0"
+                        onChange={e => setQty(product.id, parseInt(e.target.value) || 0, currentUom)}
+                        style={{ width: 56, textAlign: 'center', fontSize: 13, padding: '4px 6px' }} />
+                      <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) + 1, currentUom)}
+                        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    </div>
+                    {currentUom !== 'ROLA' && (
+                      <div style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+                        {fmtVal(Math.round(pretRola * getUomCoeficient(product, currentUom) * 100) / 100)} / {(relevantUoms.find(u => u.uom_code === currentUom)?.uom_name || currentUom).toLowerCase()}
+                      </div>
+                    )}
                   </div>
 
                   {inCart?.cantitate > 0 && (

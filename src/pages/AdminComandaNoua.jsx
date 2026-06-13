@@ -4,7 +4,7 @@ import Layout from '../Layout'
 import { useAuth } from '../AuthContext'
 import { useStore } from '../StoreContext'
 import { lei, eur, fmtDate } from '../utils'
-import { calculeazaCos, getPromotiiNotificabile } from '../promoEngine.js'
+import { calculeazaCos, getPromotiiNotificabile, primaryUom } from '../promoEngine.js'
 
 const TVA = 0.21
 
@@ -83,13 +83,23 @@ export default function AdminComandaNoua() {
     return uom?.coeficient || 1
   }
 
-  // Unitatea de măsură atribuită clientului (paletizarea preferată)
-  const assignedUom = firma?.paletizare_preferata || null
+  function normalizeUomKey(s) {
+    return (s || '').toString().toUpperCase().replace(/[\s()]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+  }
+
+  function resolveAssignedUom(product) {
+    if (!firma?.paletizare_preferata) return null
+    const key = normalizeUomKey(firma.paletizare_preferata)
+    const uoms = (product.product_uom || []).filter(u => u.is_orderable)
+    const match = uoms.find(u => normalizeUomKey(u.uom_code) === key || normalizeUomKey(u.uom_name) === key)
+    return match?.uom_code || null
+  }
 
   function getFirstUom(product) {
     const uoms = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
-    if (assignedUom && uoms.some(u => u.uom_code === assignedUom)) return assignedUom
-    return uoms[0]?.uom_code || 'ROLA'
+    const assigned = resolveAssignedUom(product)
+    if (assigned) return assigned
+    return uoms.find(u => u.uom_code === 'BAX')?.uom_code || uoms[0]?.uom_code || 'ROLA'
   }
 
   const liniiCos = useMemo(() => {
@@ -251,9 +261,9 @@ export default function AdminComandaNoua() {
                   const inCart = cart[product.id]
                   const allOrderable = (product.product_uom || []).filter(u => u.is_orderable).sort((a, b) => a.sort_order - b.sort_order)
                   // Blocăm pe unitatea atribuită clientului dacă produsul o suportă
-                  const lockedUom = assignedUom && allOrderable.some(u => u.uom_code === assignedUom) ? assignedUom : null
+                  const lockedUom = resolveAssignedUom(product)
                   const currentUom = lockedUom || inCart?.unitateSel || getFirstUom(product)
-                  const pretUom = getPretPerUom(product, currentUom)
+                  const pretRola = firma ? getPretPentruClient(product.id, firma.id) : 0
                   const uoms = lockedUom ? allOrderable.filter(u => u.uom_code === lockedUom) : allOrderable
 
                   return (
@@ -270,11 +280,11 @@ export default function AdminComandaNoua() {
                         </div>
                       </div>
 
-                      {/* Preț per UoM curentă */}
+                      {/* Preț per unitate primară */}
                       <div style={{ textAlign: 'right', minWidth: 90 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--blue)' }}>{lei(pretUom)}</div>
-                        {isEur && exRate && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{eur(pretUom / exRate.applied_rate)}</div>}
-                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>/{currentUom.toLowerCase()}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--blue)' }}>{lei(pretRola)}</div>
+                        {isEur && exRate && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{eur(pretRola / exRate.applied_rate)}</div>}
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>/{primaryUom(product).label}</div>
                       </div>
 
                       {/* UoM selector */}
@@ -286,15 +296,22 @@ export default function AdminComandaNoua() {
                         </select>
                       )}
 
-                      {/* Qty */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) - 1, currentUom)}
-                          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>−</button>
-                        <input type="number" min="0" value={inCart?.cantitate || ''} placeholder="0"
-                          onChange={e => setQty(product.id, parseInt(e.target.value) || 0, currentUom)}
-                          style={{ width: 54, textAlign: 'center', fontSize: 13, padding: '3px 6px' }} />
-                        <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) + 1, currentUom)}
-                          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>+</button>
+                      {/* Qty + price per UoM */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) - 1, currentUom)}
+                            style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>−</button>
+                          <input type="number" min="0" value={inCart?.cantitate || ''} placeholder="0"
+                            onChange={e => setQty(product.id, parseInt(e.target.value) || 0, currentUom)}
+                            style={{ width: 54, textAlign: 'center', fontSize: 13, padding: '3px 6px' }} />
+                          <button onClick={() => setQty(product.id, (inCart?.cantitate || 0) + 1, currentUom)}
+                            style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--white)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>+</button>
+                        </div>
+                        {currentUom !== 'ROLA' && (
+                          <div style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+                            {lei(Math.round(pretRola * getUomCoeficient(product, currentUom) * 100) / 100)} / {(uoms.find(u => u.uom_code === currentUom)?.uom_name || currentUom).toLowerCase()}
+                          </div>
+                        )}
                       </div>
 
                       {inCart?.cantitate > 0 && (
