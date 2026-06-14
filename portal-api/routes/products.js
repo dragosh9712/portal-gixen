@@ -154,7 +154,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       location_id:          p.location_id                 || null,
       selectsoft_cod:       p.selectsoft_cod|| p.cod      || null,
       um:                   p.um                          || 'BUC',
-      image_url:            p.image_url || p.imagine      || null,
+      image_url:            (typeof (p.image_url || p.imagine) === 'string' && (p.image_url || p.imagine).startsWith('data:')) ? null : (p.image_url || p.imagine || null),
     })
 
     // UoM auto-generate
@@ -195,6 +195,12 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const p = req.body
+    // Protecție: nu salvăm base64 (data: URI) în image_url — coloana e VARCHAR(500).
+    // Imaginile se încarcă prin POST /api/upload/product-image. Un data: URI ajuns aici
+    // se ignoră (păstrăm valoarea existentă via COALESCE).
+    const imageUrlClean = (typeof p.image_url === 'string' && p.image_url.startsWith('data:')) ? null
+      : (typeof p.imagine === 'string' && p.imagine.startsWith('data:')) ? null
+      : (p.image_url || p.imagine || null)
     await query(`
       UPDATE products SET
         code                  = @code,
@@ -240,7 +246,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       fsinc:       p.fsinc      ? 1 : 0,
       fsinc_stoc:  p.fsinc_stoc ? 1 : 0,
       fsinc_pret:  p.fsinc_pret ? 1 : 0,
-      image_url:    p.image_url || p.imagine || null,
+      image_url:    imageUrlClean,
       specs_json:   p.specs_json ? (typeof p.specs_json === 'string' ? p.specs_json : JSON.stringify(p.specs_json)) : null,
       datasheet_url: p.datasheet_url || null,
       active:       p.activ !== false ? 1 : 0,
