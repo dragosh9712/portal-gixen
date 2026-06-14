@@ -237,7 +237,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       brand:       p.brand                  || null,
       label_brand: p.label_brand            || null,
       pbfid:       p.private_brand_firm_id  || null,
-      vizibilitate: p.vizibilitate === 'privat' ? 'privat' : (p.vizibilitate ? 'public' : null),
+      vizibilitate: p.private_brand_firm_id ? 'privat' : (p.vizibilitate === 'privat' ? 'privat' : 'public'),
       rpb:         p.rolls_per_pack         || 6,
       ppv:         p.packs_per_pallet_van   || 44,
       ppt:         p.packs_per_pallet_truck || 56,

@@ -78,14 +78,76 @@ async function sendOnboardingRejected(email, firmName, reason) {
   await send(email, 'Cerere respinsă — Gixen Portal B2B', html).catch(() => {})
 }
 
+function fmtLei(v, currency) {
+  const n = (Math.round((v || 0) * 100) / 100).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return n + ' ' + (currency || 'RON')
+}
+
+function buildOrderTable(lines, discountLines, netTotal, tvaTotal, grossTotal, currency) {
+  if (!lines || !lines.length) return ''
+  const cur = currency || 'RON'
+  const tdL = `style="padding:7px 10px;border:1px solid #e2e8f0;text-align:left"`
+  const tdC = `style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center"`
+  const tdR = `style="padding:7px 10px;border:1px solid #e2e8f0;text-align:right"`
+  const thL = `style="padding:7px 10px;border:1px solid #e2e8f0;background:#f1f5f9;color:#475569;text-align:left"`
+  const thC = `style="padding:7px 10px;border:1px solid #e2e8f0;background:#f1f5f9;color:#475569;text-align:center"`
+  const thR = `style="padding:7px 10px;border:1px solid #e2e8f0;background:#f1f5f9;color:#475569;text-align:right"`
+  const rows = lines.map(l => {
+    const qty = l.cantitate != null ? l.cantitate : (l.quantity || '')
+    const uom = l.uomCode || l.uom_code || ''
+    const name = l.productName || l.product_name || ''
+    const unitPrice = l.pretUnitar || l.unit_price || 0
+    const lineTotal = l.total != null ? l.total : (l.line_total || 0)
+    return `<tr>
+      <td ${tdL}>${name}</td>
+      <td ${tdC}>${qty}</td>
+      <td ${tdC}>${uom}</td>
+      <td ${tdR}>${fmtLei(unitPrice, cur)}</td>
+      <td ${tdR}>${fmtLei(lineTotal, cur)}</td>
+    </tr>`
+  }).join('')
+  const discountRows = (discountLines || []).map(d => {
+    const label = d.eticheta || d.label || 'Discount'
+    const val = parseFloat(d.valoare || d.value || 0)
+    return `<tr style="background:#fffbeb">
+      <td colspan="4" ${tdL} style="padding:7px 10px;border:1px solid #e2e8f0;color:#92400e;font-style:italic">🎁 ${label}</td>
+      <td ${tdR} style="padding:7px 10px;border:1px solid #e2e8f0;color:#16a34a;font-weight:600">${fmtLei(val, cur)}</td>
+    </tr>`
+  }).join('')
+  const footerRow = (label, value, bold) => `<tr ${bold ? 'style="background:#f0f9ff"' : ''}>
+    <td colspan="4" ${tdR} style="padding:7px 10px;border:1px solid #e2e8f0;font-weight:${bold ? '700' : '600'};color:${bold ? '#0c4a6e' : '#475569'}">${label}</td>
+    <td ${tdR} style="padding:7px 10px;border:1px solid #e2e8f0;font-weight:${bold ? '700' : '600'};color:${bold ? '#0c4a6e' : '#374151'}">${fmtLei(value, cur)}</td>
+  </tr>`
+  return `
+  <div style="font-size:12px;font-weight:600;color:#334155;margin:16px 0 6px">Detalii comandă:</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+    <thead><tr>
+      <th ${thL}>Produs</th>
+      <th ${thC}>Cant.</th>
+      <th ${thC}>UM</th>
+      <th ${thR}>Preț/buc (fără TVA)</th>
+      <th ${thR}>Total linie (fără TVA)</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      ${discountRows}
+      ${footerRow('Total net (fără TVA)', netTotal)}
+      ${footerRow('TVA 21%', tvaTotal)}
+      ${footerRow('TOTAL (cu TVA)', grossTotal, true)}
+    </tbody>
+  </table>`
+}
+
 async function sendOrderPlaced(email, order) {
+  const table = buildOrderTable(order.lines, order.discountLines, order.netTotal, order.tvaTotal, order.grossTotal, order.currency)
   const html = wrap(`Comandă confirmată — #${order.nr || order.id}`, `
     <p style="color:#444;line-height:1.7">Comanda dumneavoastră a fost plasată cu succes.</p>
     <table width="100%" style="border-collapse:collapse;margin:16px 0;font-size:13px">
       <tr style="background:#f8fafc"><td style="padding:8px 12px;font-weight:600;color:#555;width:40%">Număr comandă</td><td style="padding:8px 12px">#${order.nr || order.id}</td></tr>
-      <tr><td style="padding:8px 12px;font-weight:600;color:#555">Total (cu TVA)</td><td style="padding:8px 12px;font-weight:700;color:#1a6bbf">${order.totalDisplay || ''}</td></tr>
-      <tr style="background:#f8fafc"><td style="padding:8px 12px;font-weight:600;color:#555">Status</td><td style="padding:8px 12px"><span style="background:#dbeafe;color:#1e40af;padding:2px 10px;border-radius:20px;font-size:12px">În procesare</span></td></tr>
+      ${order.dataLivrare ? `<tr><td style="padding:8px 12px;font-weight:600;color:#555">Data livrare dorită</td><td style="padding:8px 12px">${order.dataLivrare}</td></tr>` : ''}
+      ${order.observatii ? `<tr style="background:#f8fafc"><td style="padding:8px 12px;font-weight:600;color:#555">Observații</td><td style="padding:8px 12px">${order.observatii}</td></tr>` : ''}
     </table>
+    ${table || `<p style="color:#1a6bbf;font-weight:700;font-size:15px">Total (cu TVA): ${order.totalDisplay || ''}</p>`}
     <p style="color:#444;line-height:1.7">Veți fi notificat când statusul comenzii se actualizează.</p>`)
   await send(email, `Comandă confirmată #${order.nr || order.id} — Gixen`, html).catch(() => {})
 }
@@ -111,12 +173,14 @@ const ORDER_STATUS_COLORS = {
 async function sendOrderStatusChanged(email, order, newStatus) {
   const label = ORDER_STATUS_LABELS[newStatus] || newStatus
   const color = ORDER_STATUS_COLORS[newStatus] || '#555'
+  const table = buildOrderTable(order.lines, order.discountLines, order.netTotal, order.tvaTotal, order.grossTotal, order.currency)
   const html = wrap(`Status comandă actualizat — #${order.nr || order.id}`, `
     <p style="color:#444;line-height:1.7">Statusul comenzii <strong>#${order.nr || order.id}</strong> a fost actualizat.</p>
     <div style="text-align:center;margin:20px 0;padding:16px;background:#f8fafc;border-radius:8px">
       <span style="font-size:18px;font-weight:700;color:${color}">${label}</span>
     </div>
-    ${newStatus === 'anulata' ? '<p style="color:#dc2626;font-size:13px">Comanda a fost anulată. Contactați echipa noastră pentru detalii suplimentare.</p>' : ''}`)
+    ${newStatus === 'anulata' ? '<p style="color:#dc2626;font-size:13px">Comanda a fost anulată. Contactați echipa noastră pentru detalii suplimentare.</p>' : ''}
+    ${table}`)
   await send(email, `Status comandă #${order.nr || order.id}: ${label} — Gixen`, html).catch(() => {})
 }
 
@@ -157,34 +221,11 @@ async function sendSurveyReminder(email, firmName) {
 }
 
 async function sendOrderEdited(email, order, editedBy, reason) {
-  const fmtLei = v => (Math.round((v || 0) * 100) / 100).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' RON'
-  const lines = order.lines || []
-  const linesTable = lines.length ? `
-    <div style="font-size:12px;font-weight:600;color:#334155;margin:16px 0 6px">Forma actualizată a comenzii:</div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
-      <thead>
-        <tr style="background:#f1f5f9;color:#475569">
-          <th style="text-align:left;padding:7px 10px;border:1px solid #e2e8f0">Produs</th>
-          <th style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">Cant.</th>
-          <th style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">UM</th>
-          <th style="text-align:right;padding:7px 10px;border:1px solid #e2e8f0">Total linie</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${lines.map(l => `
-          <tr>
-            <td style="padding:7px 10px;border:1px solid #e2e8f0">${l.productName || l.product_name || ''}</td>
-            <td style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">${l.cantitate != null ? l.cantitate : (l.quantity || '')}</td>
-            <td style="text-align:center;padding:7px 10px;border:1px solid #e2e8f0">${l.uomCode || l.uom_code || ''}</td>
-            <td style="text-align:right;padding:7px 10px;border:1px solid #e2e8f0">${fmtLei(l.total != null ? l.total : l.line_total)}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>
-    <div style="text-align:right;font-size:14px;font-weight:700;color:#0f172a;margin-bottom:8px">Total comandă (cu TVA): ${fmtLei(order.total)}</div>` : ''
+  const table = buildOrderTable(order.lines, order.discountLines, order.netTotal, order.tvaTotal, order.grossTotal || order.total, order.currency)
   const html = wrap(`Comandă modificată — #${order.nr || order.id}`, `
     <p style="color:#444;line-height:1.7">Comanda dumneavoastră <strong>#${order.nr || order.id}</strong> a fost modificată de echipa Gixen.</p>
     ${reason ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;padding:14px;margin:16px 0;color:#92400e;font-size:13px"><strong>Motiv modificare:</strong> ${reason}</div>` : ''}
-    ${linesTable}
+    ${table}
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;padding:12px 14px;margin:12px 0;color:#075985;font-size:13px">
       Modificat de: <strong>${editedBy || 'administrator'}</strong>
     </div>

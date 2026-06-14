@@ -293,6 +293,7 @@ router.post('/', authenticateToken, async (req, res) => {
     // Insert linii
     let netTotal = 0
     const lines = o.lines || []
+    const linesForEmail = []
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
       // Frontend trimite productId sau product_id
@@ -303,6 +304,7 @@ router.post('/', authenticateToken, async (req, res) => {
       const lineTotal = Math.round(qty * unitPrice * 100) / 100
       const lineTva   = Math.round(lineTotal * TVA * 100) / 100
       netTotal += lineTotal
+      linesForEmail.push({ productName: l.productName || l.name || l.denumire || productId, cantitate: qty, uomCode, pretUnitar: unitPrice, total: lineTotal })
 
       await query(`
         INSERT INTO order_lines (order_id, product_id, uom_code, line_number,
@@ -352,7 +354,14 @@ router.post('/', authenticateToken, async (req, res) => {
     if (custResult.recordset[0]?.email) {
       emailSvc.sendOrderPlaced(custResult.recordset[0].email, {
         nr, id,
-        totalDisplay: `${grossTotal.toFixed(2)} RON`,
+        lines: linesForEmail,
+        discountLines,
+        netTotal: netFinal,
+        tvaTotal,
+        grossTotal,
+        currency: o.currency || 'RON',
+        dataLivrare: o.delivery_date || null,
+        observatii: o.observations || '',
       }).catch(() => {})
     }
 
@@ -381,16 +390,31 @@ router.put('/:id/status', authenticateToken, requireAdmin, async (req, res) => {
       }
     }
 
-    // Email notificare client
+    // Email notificare client — cu linii complete
     const orderResult = await query(
-      `SELECT o.order_number, u.email
+      `SELECT o.order_number, o.net_total, o.tva_total, o.gross_total, o.currency,
+              o.discount_lines_json,
+              u.email,
+              (SELECT ol.quantity, ol.uom_code, ol.unit_price, ol.line_total, p.name AS product_name
+               FROM order_lines ol JOIN products p ON ol.product_id = p.id
+               WHERE ol.order_id = o.id FOR JSON PATH) AS lines_json
        FROM orders o
        JOIN users u ON u.customer_id = o.customer_id AND u.delegate_type = 'primary' AND u.status != 'inactive'
        WHERE o.id = @id`, { id: req.params.id }
     )
     const row = orderResult.recordset[0]
     if (row?.email) {
-      emailSvc.sendOrderStatusChanged(row.email, { nr: row.order_number, id: req.params.id }, status).catch(() => {})
+      const emailLines = row.lines_json ? JSON.parse(row.lines_json).map(l => ({
+        productName: l.product_name, cantitate: l.quantity, uomCode: l.uom_code,
+        pretUnitar: l.unit_price, total: l.line_total,
+      })) : []
+      const emailDiscounts = row.discount_lines_json ? JSON.parse(row.discount_lines_json) : []
+      emailSvc.sendOrderStatusChanged(row.email, {
+        nr: row.order_number, id: req.params.id,
+        lines: emailLines, discountLines: emailDiscounts,
+        netTotal: row.net_total, tvaTotal: row.tva_total, grossTotal: row.gross_total,
+        currency: row.currency || 'RON',
+      }, status).catch(() => {})
     }
 
     res.json({ message: `Status actualizat: ${status}` })
