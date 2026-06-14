@@ -139,6 +139,7 @@ export function StoreProvider({ children }) {
       lines,
       delivery_address: adresaLivrare || '',
       observations: observatii || '',
+      delivery_date: dataLivrare || null,
       payment_type: extra?.payment_type || 'OP',
       transport_type: extra?.transport_type || 'Van',
       requires_proforma: !!extra?.requires_proforma,

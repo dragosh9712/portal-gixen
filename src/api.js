@@ -108,6 +108,7 @@ const api = {
     editLines:  (id, data)     => req('PUT',  `/api/orders/${id}/lines`, data),
     checkPayment:   id         => req('POST', `/api/orders/${id}/check-payment`),
     setProformaNr: (id, nr)   => req('PUT',  `/api/orders/${id}/proforma-nr`, { proforma_nr_intern: nr }),
+    setDeliveryDateConfirmed: (id, date) => req('PUT', `/api/orders/${id}/delivery-date`, { delivery_date_confirmed: date }),
     proforma:  id              => req('GET',  `/api/orders/${id}/proforma`),
     pushSS:    (id, proforma)  => req('POST', `/api/orders/${id}/push-selectsoft`, { proforma }),
   },

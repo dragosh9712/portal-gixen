@@ -187,6 +187,7 @@ function normalizeOrder(o) {
     status:         o.status,
     dataComanda:    o.order_date || o.created_at,
     dataLivrare:    o.delivery_date || null,
+    deliveryDateConfirmed: o.delivery_date_confirmed || null,
     nrFactura:      o.invoice_number || null,
     nrAviz:         o.delivery_note_number || null,
     observatii:     o.observations || '',
@@ -270,10 +271,10 @@ router.post('/', authenticateToken, async (req, res) => {
       INSERT INTO orders (id, order_number, customer_id, user_id, agent_id, location_id,
         delivery_location_id, status, order_date, payment_type, transport_type,
         observations, currency, applied_exchange_rate, tva_rate,
-        net_total, tva_total, gross_total, total_discount, delivery_address, payment_status)
+        net_total, tva_total, gross_total, total_discount, delivery_address, payment_status, delivery_date)
       VALUES (@id, @nr, @cid, @uid, @aid, @lid, @dlid,
         '${initialStatus}', CAST(SYSDATETIME() AS DATE), @pay, @transport,
-        @obs, @currency, @exrate, 21.00, 0, 0, 0, 0, @addr, ${requiresProforma ? "'asteptare_plata'" : 'NULL'})`, {
+        @obs, @currency, @exrate, 21.00, 0, 0, 0, 0, @addr, ${requiresProforma ? "'asteptare_plata'" : 'NULL'}, @ddate)`, {
       id, nr,
       cid:      o.customer_id,
       uid:      req.user.id,
@@ -286,6 +287,7 @@ router.post('/', authenticateToken, async (req, res) => {
       currency: o.currency       || 'RON',
       exrate:   o.applied_exchange_rate || null,
       addr:     o.delivery_address || '',
+      ddate:    o.delivery_date || null,
     })
 
     // Insert linii
@@ -543,6 +545,18 @@ router.put('/:id/proforma-nr', authenticateToken, requireAdmin, async (req, res)
     if (!ordRes.recordset[0]) return res.status(404).json({ error: 'Comanda nu există' })
     await query('UPDATE orders SET proforma_nr_intern=@nr WHERE id=@id',
       { id: req.params.id, nr: proforma_nr_intern.toString().trim() })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PUT /api/orders/:id/delivery-date — admin setează data livrare confirmată
+router.put('/:id/delivery-date', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { delivery_date_confirmed } = req.body
+    await query('UPDATE orders SET delivery_date_confirmed=@d WHERE id=@id',
+      { id: req.params.id, d: delivery_date_confirmed || null })
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

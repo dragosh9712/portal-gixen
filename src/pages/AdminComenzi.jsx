@@ -60,6 +60,8 @@ export default function AdminComenzi() {
   const [locationInput, setLocationInput] = useState('')
   const [editModal, setEditModal] = useState(null)   // { orderId, lines: [...] }
   const [editSaving, setEditSaving] = useState(false)
+  const [deliveryDateConfirmedInput, setDeliveryDateConfirmedInput] = useState('')
+  const [savingDeliveryDate, setSavingDeliveryDate] = useState(false)
 
   const firms = db.firms.filter(f => f.status === 'activ')
   const orders = db.orders.filter(o => {
@@ -201,6 +203,18 @@ export default function AdminComenzi() {
     } catch (e) { showToast('Eroare: ' + e.message) }
   }
 
+  async function handleSaveDeliveryDate() {
+    if (!selected) return
+    setSavingDeliveryDate(true)
+    try {
+      await api.orders.setDeliveryDateConfirmed(selected.id, deliveryDateConfirmedInput || null)
+      setSelected(prev => ({ ...prev, deliveryDateConfirmed: deliveryDateConfirmedInput || null }))
+      await refreshOrders()
+      showToast('Data livrare confirmată salvată!')
+    } catch (e) { showToast('Eroare: ' + e.message) }
+    finally { setSavingDeliveryDate(false) }
+  }
+
   async function handleSaveEdit() {
     if (!editModal) return
     if (!editCalc.liniiCalculate.length) return showToast('Comanda trebuie să aibă cel puțin o linie!')
@@ -292,7 +306,7 @@ export default function AdminComenzi() {
                   const nextStatuses = NEXT_STATUSES[o.status] || []
                   const isSelected = selectedIds.includes(o.id)
                   return (
-                    <tr key={o.id} className={isSelected ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => { setSelected(o); setProformaNrInput(o.proformaNr || '') }}>
+                    <tr key={o.id} className={isSelected ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => { setSelected(o); setProformaNrInput(o.proformaNr || ''); setDeliveryDateConfirmedInput(o.deliveryDateConfirmed ? o.deliveryDateConfirmed.slice(0,10) : '') }}>
                       <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(o.id)} /></td>
                       <td><CopyButton text={o.nr}><b>{o.nr}</b></CopyButton></td>
                       <td style={{ fontSize: 12 }}>{firm?.name}</td>
@@ -405,7 +419,14 @@ export default function AdminComenzi() {
             <div className="modal-order-grid" style={{ marginBottom: 16, fontSize: 13 }}>
               <div><div className="text-muted">Client</div>{db.firms.find(f => f.id === selected.firmId)?.name}</div>
               <div><div className="text-muted">Data comandă</div>{fmtDate(selected.dataComanda)}</div>
-              <div><div className="text-muted">Data livrare</div>{fmtDate(selected.dataLivrare)}</div>
+              <div><div className="text-muted">Data livrare dorită</div>{fmtDate(selected.dataLivrare) || '—'}</div>
+              <div>
+                <div className="text-muted">Data livrare confirmată (admin)</div>
+                <div className="flex gap-8" style={{ marginTop: 4, alignItems: 'center' }}>
+                  <input type="date" value={deliveryDateConfirmedInput} onChange={e => setDeliveryDateConfirmedInput(e.target.value)} style={{ fontSize: 13 }} />
+                  <button className="btn btn-primary btn-sm" onClick={handleSaveDeliveryDate} disabled={savingDeliveryDate}>Salvează</button>
+                </div>
+              </div>
               <div>
                 <div className="text-muted">Nr. factură</div>
                 {selected.nrFactura ? <b>{selected.nrFactura}</b> : (

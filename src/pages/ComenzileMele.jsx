@@ -105,7 +105,8 @@ export default function ComenzileMele() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16, fontSize: 13 }}>
               <div><div className="text-muted">Status</div>{statusBadge(selected.status)}</div>
               <div><div className="text-muted">Data comandă</div>{fmtDate(selected.dataComanda)}</div>
-              <div><div className="text-muted">Data livrare</div>{fmtDate(selected.dataLivrare)}</div>
+              <div><div className="text-muted">Data livrare dorită</div>{fmtDate(selected.dataLivrare) || '—'}</div>
+              {selected.deliveryDateConfirmed && <div><div className="text-muted">Data livrare confirmată</div><b>{fmtDate(selected.deliveryDateConfirmed)}</b></div>}
               <div><div className="text-muted">Factură</div>{selected.nrFactura || '—'}</div>
               {selected.observatii && <div style={{ gridColumn: '1/-1' }}><div className="text-muted">Observații</div>{selected.observatii}</div>}
             </div>

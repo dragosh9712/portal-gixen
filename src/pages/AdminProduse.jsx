@@ -205,7 +205,7 @@ export default function AdminProduse() {
     setImageFile(null)
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (selected === 'new') {
       if (!editForm.name.trim()) return showToast('Completează denumirea produsului!', 'error')
       // Construiesc UoM auto din rolls_per_pack
@@ -229,8 +229,19 @@ export default function AdminProduse() {
       setSelected(null)
       showToast('Produs creat cu succes!')
     } else {
-      updateProduct(selected.id, { ...editForm, image_url: imagePreview || editForm.image_url, imagine: imagePreview || editForm.imagine })
-      setSelected({ ...selected, ...editForm })
+      let imageUrl = editForm.image_url || null
+      if (imageFile) {
+        try {
+          const uploadRes = await api.products.uploadImage(selected.id, imageFile)
+          imageUrl = uploadRes.image_url
+          setImageFile(null)
+        } catch (err) {
+          showToast('Eroare upload imagine: ' + err.message, 'error')
+          return
+        }
+      }
+      updateProduct(selected.id, { ...editForm, image_url: imageUrl, imagine: imageUrl })
+      setSelected({ ...selected, ...editForm, image_url: imageUrl, imagine: imageUrl })
       showToast('Produs actualizat!')
     }
   }
@@ -350,7 +361,7 @@ export default function AdminProduse() {
                       </div>
                     </td>
                     <td style={{ fontSize: 12, color: p.private_brand_firm_id ? 'var(--blue-text)' : 'var(--text3)' }}>
-                      {p.private_brand_firm_id ? ownerName(p.private_brand_firm_id) : 'Gixen'}
+                      {p.private_brand_firm_id ? (p.marca_proprie_firma || ownerName(p.private_brand_firm_id)) : 'Gixen'}
                     </td>
                     <td style={{ fontSize: 12 }}>{p.brand || '—'}</td>
                     <td><span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--bg3)', borderRadius: 4, fontFamily: 'monospace' }}>{p.product_type || '—'}</span></td>
@@ -443,7 +454,7 @@ export default function AdminProduse() {
                       <button type="button" className="w-full" onClick={() => setOwnerPickerOpen(true)}
                         style={{ textAlign: 'left', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', cursor: 'pointer', fontSize: 13 }}>
                         {editForm.private_brand_firm_id
-                          ? <>👤 {ownerName(editForm.private_brand_firm_id)}</>
+                          ? <>👤 {editForm.marca_proprie_firma || ownerName(editForm.private_brand_firm_id)}</>
                           : <>🏠 Gixen (produs propriu)</>}
                       </button>
                     </div>

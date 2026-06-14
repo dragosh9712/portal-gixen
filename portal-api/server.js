@@ -152,6 +152,9 @@ async function runMigrations() {
         is_active BIT DEFAULT 1,
         created_at DATETIME2 DEFAULT SYSDATETIME()
       )`)
+    // Delivery dates
+    await query(`IF COL_LENGTH('orders','delivery_date') IS NULL ALTER TABLE orders ADD delivery_date DATE NULL`)
+    await query(`IF COL_LENGTH('orders','delivery_date_confirmed') IS NULL ALTER TABLE orders ADD delivery_date_confirmed DATE NULL`)
     // 2FA columns
     await query(`IF COL_LENGTH('users','two_fa_enabled') IS NULL ALTER TABLE users ADD two_fa_enabled BIT DEFAULT 1`)
     await query(`IF COL_LENGTH('users','otp_code')       IS NULL ALTER TABLE users ADD otp_code       NVARCHAR(64)`)

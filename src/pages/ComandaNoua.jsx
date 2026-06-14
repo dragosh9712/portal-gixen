@@ -294,9 +294,6 @@ export default function ComandaNoua() {
                     )}
                   </div>
 
-                  {inCart?.cantitate > 0 && (
-                    <button onClick={() => removeFromCart(product.id)} className="btn btn-danger btn-sm">✕</button>
-                  )}
                 </div>
               )
             })}
