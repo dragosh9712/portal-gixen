@@ -572,7 +572,7 @@ export default function AdminComenzi() {
                         <div style={{ fontSize: 10, color: 'var(--text3)' }}>{l.cantRole} {primaryUom(l.produs).label}</div>
                       </td>
                       <td>
-                        <button className="btn btn-sm btn-danger" title="Elimină linia" onClick={() => removeEditLine(l.productId)}>✕</button>
+                        <button className="btn btn-sm btn-danger" title="Elimină linia" onClick={() => removeEditLine(l.productId)}>🗑</button>
                       </td>
                     </tr>
                   )

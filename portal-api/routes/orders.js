@@ -509,7 +509,7 @@ router.put('/:id/lines', authenticateToken, requireAdmin, async (req, res) => {
     if (clientEmail && updatedOrder) {
       emailSvc.sendOrderEdited(
         clientEmail,
-        { nr: updatedOrder.nr, id: req.params.id, lines: updatedOrder.lines, total: updatedOrder.total },
+        { nr: updatedOrder.nr, id: req.params.id, lines: updatedOrder.lines, total: updatedOrder.total, netTotal: updatedOrder.netTotal, tvaTotal: updatedOrder.tvaTotal, grossTotal: updatedOrder.total, discountLines: updatedOrder.discountLinii, currency: updatedOrder.currency },
         req.user.name || req.user.email,
         reason
       ).catch(() => {})

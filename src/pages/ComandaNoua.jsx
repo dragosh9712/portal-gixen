@@ -333,9 +333,12 @@ export default function ComandaNoua() {
                   const uomLabel = (linie.produs?.product_uom || []).find(u => u.uom_code === linie.unitateSel)?.uom_name || linie.unitateSel
                   return (
                     <div key={linie.productId} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border2)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 1 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, flex: 1, paddingRight: 8 }}>{linie.produs?.name}</div>
-                        <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtVal(linie.totalBrutLinie)}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtVal(linie.totalBrutLinie)}</div>
+                          <button onClick={() => removeFromCart(linie.productId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14, padding: '0 2px', lineHeight: 1 }} title="Șterge din coș">🗑</button>
+                        </div>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>
                         {linie.cantitate} {uomLabel?.toLowerCase()} × {fmtVal(linie.pretClient)}/{primaryUom(linie.produs).label}
